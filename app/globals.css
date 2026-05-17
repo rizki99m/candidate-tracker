@@ -4,8 +4,114 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  padding: 0;
+  min-height: 100vh;
+  background: #edf4f2;
+  color: #0f172a;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0.75rem 1rem;
+  color: #0f172a;
+  outline: none;
+  transition: 0.2s ease;
+}
+
+.input:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: #0f172a;
+  padding: 0.85rem 1.25rem;
+  font-weight: 900;
+  color: white;
+  transition: 0.2s ease;
+}
+
+.primary-button:hover {
+  background: #064e3b;
+}
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid #cbd5e1;
+  background: white;
+  padding: 0.85rem 1.25rem;
+  font-weight: 900;
+  color: #0f172a;
+  transition: 0.2s ease;
+}
+
+.secondary-button:hover {
+  background: #f1f5f9;
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: #e11d48;
+  padding: 0.75rem 1rem;
+  font-weight: 900;
+  color: white;
+  transition: 0.2s ease;
+}
+
+.danger-button:hover {
+  background: #be123c;
+}
+
+.card {
+  border-radius: 2rem;
+  border: 1px solid white;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: 1.5rem;
+  }
 }
