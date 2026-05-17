@@ -6,7 +6,6 @@ import {
   Candidate,
   DateFilter,
   Role,
-  candidateStatuses,
   filterCandidates,
   getRoleName,
   loadCandidates,
@@ -16,15 +15,30 @@ import {
   statusColor,
 } from "@/lib/recruitment";
 
+type SearchColumn = "name" | "role" | "status" | "position";
+const dashboardStatuses: Candidate["status"][] = [
+  "HR Interview",
+  "User Interview",
+  "Offering",
+  "Rejected",
+  "Withdraw",
+];
+
 export default function DashboardPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-
+  const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(
+    null,
+  );
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchColumn, setSearchColumn] = useState<SearchColumn>("name");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setRoles(loadRoles());
@@ -38,31 +52,66 @@ export default function DashboardPage() {
       dateFilter,
       customStart,
       customEnd,
-    });
-  }, [candidates, roleFilter, statusFilter, dateFilter, customStart, customEnd]);
+    }).filter((candidate) =>
+      matchesDashboardSearch(candidate, roles, searchColumn, searchQuery),
+    );
+  }, [
+    candidates,
+    roles,
+    roleFilter,
+    statusFilter,
+    dateFilter,
+    customStart,
+    customEnd,
+    searchColumn,
+    searchQuery,
+  ]);
+
+  const statusDistributionCandidates = useMemo(() => {
+    return filterCandidates(candidates, {
+      roleFilter,
+      statusFilter: "all",
+      dateFilter,
+      customStart,
+      customEnd,
+    }).filter((candidate) =>
+      matchesDashboardSearch(candidate, roles, searchColumn, searchQuery),
+    );
+  }, [
+    candidates,
+    roles,
+    roleFilter,
+    dateFilter,
+    customStart,
+    customEnd,
+    searchColumn,
+    searchQuery,
+  ]);
 
   const totalCandidates = filteredCandidates.length;
   const totalInProcess = filteredCandidates.filter(
     (candidate) =>
-      !["Hired", "Rejected", "Withdraw"].includes(candidate.status)
+      !["Hired", "Rejected", "Withdraw"].includes(candidate.status),
   ).length;
   const totalHired = filteredCandidates.filter(
-    (candidate) => candidate.status === "Hired"
+    (candidate) => candidate.status === "Hired",
   ).length;
   const totalRejected = filteredCandidates.filter(
-    (candidate) => candidate.status === "Rejected"
+    (candidate) => candidate.status === "Rejected",
   ).length;
 
-  const statusSummary = candidateStatuses.map((status) => ({
+  const statusSummary = dashboardStatuses.map((status) => ({
     status,
-    count: filteredCandidates.filter((candidate) => candidate.status === status)
-      .length,
+    count: statusDistributionCandidates.filter(
+      (candidate) => candidate.status === status,
+    ).length,
   }));
 
   const roleSummary = roles.map((role) => ({
     role,
-    count: filteredCandidates.filter((candidate) => candidate.roleId === role.id)
-      .length,
+    count: filteredCandidates.filter(
+      (candidate) => candidate.roleId === role.id,
+    ).length,
   }));
 
   function handleReset() {
@@ -72,78 +121,171 @@ export default function DashboardPage() {
     resetDemoData();
     setRoles(loadRoles());
     setCandidates(loadCandidates());
+    setDateFilter("all");
+    setRoleFilter("all");
+    setStatusFilter("all");
+    setCustomStart("");
+    setCustomEnd("");
+    setSearchQuery("");
+    setSearchOpen(false);
+    setSearchColumn("name");
+  }
+
+  function clearFilters() {
+    setDateFilter("all");
+    setRoleFilter("all");
+    setStatusFilter("all");
+    setCustomStart("");
+    setCustomEnd("");
+    setSearchQuery("");
+    setSearchColumn("name");
+  }
+
+  function toggleStatusFilter(status: Candidate["status"]) {
+    if (statusFilter === status) {
+      clearFilters();
+      return;
+    }
+
+    setStatusFilter(status);
   }
 
   return (
     <section className="space-y-6">
-      <div className="card">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <Field label="Date Range">
-            <select
-              value={dateFilter}
-              onChange={(event) =>
-                setDateFilter(event.target.value as DateFilter)
-              }
-              className="input"
+      <div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setSearchOpen((s) => !s)}
+            aria-label="Open filters"
+            className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700"
+          >
+            {/* Filter icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="month">This Month</option>
-              <option value="year">This Year</option>
-              <option value="custom">Custom Range</option>
-            </select>
-          </Field>
-
-          <Field label="Role">
-            <select
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
-              className="input"
-            >
-              <option value="all">All Roles</option>
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Status">
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="input"
-            >
-              <option value="all">All Status</option>
-              {candidateStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Custom Start">
-            <input
-              type="date"
-              value={customStart}
-              disabled={dateFilter !== "custom"}
-              onChange={(event) => setCustomStart(event.target.value)}
-              className="input"
-            />
-          </Field>
-
-          <Field label="Custom End">
-            <input
-              type="date"
-              value={customEnd}
-              disabled={dateFilter !== "custom"}
-              onChange={(event) => setCustomEnd(event.target.value)}
-              className="input"
-            />
-          </Field>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L15 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 019 21v-7.586L3.293 6.707A1 1 0 013 6V4z"
+              />
+            </svg>
+          </button>
         </div>
+
+        {searchOpen && (
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">
+                  Search by
+                </span>
+                <select
+                  value={searchColumn}
+                  onChange={(e) =>
+                    setSearchColumn(e.target.value as SearchColumn)
+                  }
+                  className="input"
+                >
+                  <option value="name">Candidate Name</option>
+                  <option value="role">Role</option>
+                  <option value="status">Status</option>
+                  <option value="position">Position</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">
+                  Search text
+                </span>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Enter search text..."
+                  className="input border-slate-300 bg-slate-100"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-4">
+              <Field label="Date Range">
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                  className="input"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="month">This Month</option>
+                  <option value="year">This Year</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </Field>
+
+              <Field label="Role">
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="input"
+                >
+                  <option value="all">All Roles</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Status">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="input"
+                >
+                  <option value="all">All Status</option>
+                  {dashboardStatuses.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Custom Start">
+                  <input
+                    type="date"
+                    value={customStart}
+                    disabled={dateFilter !== "custom"}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Custom End">
+                  <input
+                    type="date"
+                    value={customEnd}
+                    disabled={dateFilter !== "custom"}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="input"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button onClick={clearFilters} className="secondary-button">
+                Clear All
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -158,24 +300,45 @@ export default function DashboardPage() {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h3 className="text-xl font-black">Status Distribution</h3>
-              <p className="text-sm text-slate-500">Pie chart status kandidat</p>
+              <p className="text-sm text-slate-500">
+                Pie chart status kandidat
+              </p>
             </div>
           </div>
 
-          <DonutChart data={statusSummary} />
+          <DonutChart
+            data={statusSummary}
+            activeStatus={
+              dashboardStatuses.includes(statusFilter as Candidate["status"])
+                ? (statusFilter as Candidate["status"])
+                : null
+            }
+            onStatusClick={toggleStatusFilter}
+          />
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {statusSummary.map((item) => (
-              <div key={item.status} className="flex items-center gap-2">
+              <button
+                key={item.status}
+                type="button"
+                onClick={() => toggleStatusFilter(item.status)}
+              className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-left transition ${
+                  statusFilter === item.status
+                    ? "border-slate-950 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] ring-2 ring-slate-950"
+                    : statusFilter !== "all"
+                      ? "border-slate-200 bg-slate-100 text-slate-400"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                }`}
+              >
                 <span
                   className="h-3 w-3 rounded-full"
                   style={{ background: statusColor(item.status) }}
                 />
-                <span className="text-sm font-semibold text-slate-700">
+                <span className="text-sm font-semibold">
                   {item.status}
                 </span>
                 <span className="ml-auto text-sm font-black">{item.count}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -223,6 +386,7 @@ export default function DashboardPage() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Interview Date</th>
                 <th className="px-4 py-3">Remarks</th>
+                <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
@@ -240,7 +404,7 @@ export default function DashboardPage() {
                   <td className="px-4 py-4">
                     <span
                       className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
-                        candidate.status
+                        candidate.status,
                       )}`}
                     >
                       {candidate.status}
@@ -251,6 +415,17 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-4 py-4 text-slate-600">
                     {candidate.remarks || "-"}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setDetailCandidate(candidate)}
+                        className="secondary-button px-3 py-2 text-xs"
+                      >
+                        Detail
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -270,7 +445,7 @@ export default function DashboardPage() {
               </p>
               <span
                 className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
-                  candidate.status
+                  candidate.status,
                 )}`}
               >
                 {candidate.status}
@@ -278,12 +453,49 @@ export default function DashboardPage() {
               <p className="mt-3 text-sm text-slate-600">
                 {candidate.remarks || "-"}
               </p>
+              <button
+                type="button"
+                onClick={() => setDetailCandidate(candidate)}
+                className="secondary-button mt-4 w-full text-sm"
+              >
+                Detail
+              </button>
             </div>
           ))}
         </div>
       </div>
+
+      <CandidateDetailDialog
+        candidate={detailCandidate}
+        roles={roles}
+        onClose={() => setDetailCandidate(null)}
+      />
     </section>
   );
+}
+
+function matchesDashboardSearch(
+  candidate: Candidate,
+  roles: Role[],
+  searchColumn: SearchColumn,
+  searchQuery: string,
+) {
+  if (!searchQuery.trim()) return true;
+
+  const raw = searchQuery.trim().toLowerCase();
+  if (searchColumn === "name") {
+    return candidate.nameOfCandidate.toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "role") {
+    return getRoleName(roles, candidate.roleId).toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "status") {
+    return candidate.status.toLowerCase().includes(raw);
+  }
+
+  return candidate.position.toLowerCase().includes(raw);
 }
 
 function MetricCard({ label, value }: { label: string; value: number }) {
@@ -314,10 +526,80 @@ function Field({
   );
 }
 
+function CandidateDetailDialog({
+  candidate,
+  roles,
+  onClose,
+}: {
+  candidate: Candidate | null;
+  roles: Role[];
+  onClose: () => void;
+}) {
+  if (!candidate) return null;
+
+  const rows: { label: string; value: string }[] = [
+    { label: "ID", value: candidate.id },
+    { label: "Role", value: getRoleName(roles, candidate.roleId) },
+    { label: "Position", value: candidate.position },
+    { label: "Level", value: candidate.level },
+    { label: "Name Of Candidate", value: candidate.nameOfCandidate },
+    { label: "LinkedIn Profile", value: candidate.linkedInProfile },
+    { label: "Summary Interview HR", value: candidate.summaryInterviewHr },
+    { label: "CV", value: candidate.cvLink },
+    { label: "Portfolio", value: candidate.portfolioLink },
+    { label: "Psychological Test", value: candidate.psychologicalTest },
+    { label: "Feedback From User", value: candidate.feedbackFromUser },
+    { label: "Remarks", value: candidate.remarks },
+    { label: "Status", value: candidate.status },
+    { label: "Interview Date", value: candidate.interviewDate },
+    { label: "HR Interview Date", value: candidate.hrInterviewDate },
+    { label: "User Interview Date", value: candidate.userInterviewDate },
+    { label: "Created At", value: candidate.createdAt },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+      <div className="max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-2xl font-black text-slate-950">
+              Candidate Detail
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {candidate.nameOfCandidate}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="secondary-button">
+            Close
+          </button>
+        </div>
+
+        <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200">
+          {rows.map((row) => (
+            <div
+              key={row.label}
+              className="grid gap-2 p-4 text-sm md:grid-cols-[220px_1fr]"
+            >
+              <p className="font-black text-slate-700">{row.label}</p>
+              <p className="whitespace-pre-wrap break-words text-slate-600">
+                {row.value || "-"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DonutChart({
   data,
+  activeStatus,
+  onStatusClick,
 }: {
   data: { status: Candidate["status"]; count: number }[];
+  activeStatus: Candidate["status"] | null;
+  onStatusClick: (status: Candidate["status"]) => void;
 }) {
   const total = data.reduce((sum, item) => sum + item.count, 0);
 
@@ -329,34 +611,121 @@ function DonutChart({
     );
   }
 
-  let current = 0;
-  const gradient = data
+  let currentAngle = -90;
+  const segments = data
     .filter((item) => item.count > 0)
     .map((item) => {
-      const start = (current / total) * 100;
-      current += item.count;
-      const end = (current / total) * 100;
-      return `${statusColor(item.status)} ${start}% ${end}%`;
-    })
-    .join(", ");
+      const angle = (item.count / total) * 360;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + Math.min(angle, 359.99);
+      currentAngle = endAngle;
+
+      return {
+        ...item,
+        path: describeDonutArc(128, 128, 112, 62, startAngle, endAngle),
+        activePath: describeDonutArc(128, 128, 118, 56, startAngle, endAngle),
+      };
+    });
 
   return (
     <div className="flex justify-center">
-      <div
-        className="grid h-64 w-64 place-items-center rounded-full"
-        style={{ background: `conic-gradient(${gradient})` }}
-      >
-        <div className="grid h-36 w-36 place-items-center rounded-full bg-white shadow-inner">
-          <div className="text-center">
-            <p className="text-4xl font-black">{total}</p>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
-              Candidates
-            </p>
+      <div className="relative h-64 w-64">
+        <svg viewBox="0 0 256 256" className="h-full w-full">
+          {segments.map((segment) => {
+            const isActive = activeStatus === segment.status;
+            const isDimmed = !!activeStatus && !isActive;
+
+            return (
+              <path
+                key={segment.status}
+                d={isActive ? segment.activePath : segment.path}
+                fill={isDimmed ? "#d1d5db" : statusColor(segment.status)}
+                opacity={isDimmed ? 0.55 : 1}
+                stroke={isActive ? "#0f172a" : "#ffffff"}
+                strokeWidth={isActive ? "4" : "3"}
+                role="button"
+                tabIndex={0}
+                className="cursor-pointer transition hover:opacity-80"
+                onClick={() => onStatusClick(segment.status)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onStatusClick(segment.status);
+                  }
+                }}
+              />
+            );
+          })}
+        </svg>
+
+        <div className="absolute inset-0 grid place-items-center pointer-events-none">
+          <div className="grid h-36 w-36 place-items-center rounded-full bg-white shadow-inner">
+            <div className="text-center">
+              <p className="text-4xl font-black">{total}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                Candidates
+              </p>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function describeDonutArc(
+  centerX: number,
+  centerY: number,
+  outerRadius: number,
+  innerRadius: number,
+  startAngle: number,
+  endAngle: number,
+) {
+  const startOuter = polarToCartesian(centerX, centerY, outerRadius, endAngle);
+  const endOuter = polarToCartesian(centerX, centerY, outerRadius, startAngle);
+  const startInner = polarToCartesian(centerX, centerY, innerRadius, startAngle);
+  const endInner = polarToCartesian(centerX, centerY, innerRadius, endAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+
+  return [
+    "M",
+    startOuter.x,
+    startOuter.y,
+    "A",
+    outerRadius,
+    outerRadius,
+    0,
+    largeArcFlag,
+    0,
+    endOuter.x,
+    endOuter.y,
+    "L",
+    startInner.x,
+    startInner.y,
+    "A",
+    innerRadius,
+    innerRadius,
+    0,
+    largeArcFlag,
+    1,
+    endInner.x,
+    endInner.y,
+    "Z",
+  ].join(" ");
+}
+
+function polarToCartesian(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  angleInDegrees: number,
+) {
+  const angleInRadians = (angleInDegrees * Math.PI) / 180;
+
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians),
+  };
 }
 
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
