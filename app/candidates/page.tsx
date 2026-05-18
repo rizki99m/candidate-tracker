@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { InteractiveValue } from "@/components/InteractiveValue";
+import {
+  PageSize,
+  PaginationControls,
+} from "@/components/PaginationControls";
 import {
   Candidate,
   Role,
@@ -15,28 +20,42 @@ import {
   statusClass,
 } from "@/lib/recruitment";
 
-type SearchColumn =
-  | "name"
-  | "role"
-  | "status"
-  | "position"
-  | "level"
-  | "interviewDate"
-  | "cvLink"
-  | "portfolioLink"
-  | "remarks";
+type SearchColumn = "role" | keyof Omit<Candidate, "id">;
 
-const emptySearchFilters: Record<SearchColumn, string> = {
-  name: "",
-  role: "",
-  status: "",
-  position: "",
-  level: "",
-  interviewDate: "",
-  cvLink: "",
-  portfolioLink: "",
-  remarks: "",
-};
+const candidateColumns: { key: SearchColumn; label: string }[] = [
+  { key: "nameOfCandidate", label: "Nama Lengkap" },
+  { key: "email", label: "Email" },
+  { key: "phoneNumber", label: "No. HP" },
+  { key: "role", label: "Role" },
+  { key: "position", label: "Posisi yang Dilamar" },
+  { key: "department", label: "Departemen" },
+  { key: "level", label: "Level" },
+  { key: "source", label: "Sumber" },
+  { key: "poolDate", label: "Tanggal Masuk Pool" },
+  { key: "workExperienceYears", label: "Pengalaman Kerja (Tahun)" },
+  { key: "education", label: "Pendidikan" },
+  { key: "university", label: "Universitas" },
+  { key: "major", label: "Jurusan" },
+  { key: "location", label: "Lokasi" },
+  { key: "rating", label: "Rating (1-5)" },
+  { key: "status", label: "Status" },
+  { key: "progress", label: "Progress" },
+  { key: "linkedInProfile", label: "LinkedIn Profile" },
+  { key: "summaryInterviewHr", label: "Summary Interview HR" },
+  { key: "cvLink", label: "CV" },
+  { key: "portfolioLink", label: "Portfolio" },
+  { key: "psychologicalTest", label: "Psychological Test" },
+  { key: "feedbackFromUser", label: "Feedback From User" },
+  { key: "remarks", label: "Catatan" },
+  { key: "interviewDate", label: "Interview Date" },
+  { key: "hrInterviewDate", label: "HR Interview Date" },
+  { key: "userInterviewDate", label: "User Interview Date" },
+  { key: "createdAt", label: "Created At" },
+];
+
+const emptySearchFilters = Object.fromEntries(
+  candidateColumns.map((column) => [column.key, ""]),
+) as Record<SearchColumn, string>;
 
 export default function CandidatesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -53,10 +72,14 @@ export default function CandidatesPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilters, setSearchFilters] = useState(emptySearchFilters);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(10);
 
   useEffect(() => {
-    setRoles(loadRoles());
-    setCandidates(loadCandidates());
+    queueMicrotask(() => {
+      setRoles(loadRoles());
+      setCandidates(loadCandidates());
+    });
   }, []);
 
   const filteredCandidates = useMemo(() => {
@@ -68,21 +91,13 @@ export default function CandidatesPage() {
       customEnd: "",
     }).filter((candidate) => {
       const raw = searchQuery.trim().toLowerCase();
-      const values = [
-        candidate.nameOfCandidate,
-        getRoleName(roles, candidate.roleId),
-        candidate.status,
-        candidate.position,
-        candidate.level,
-        candidate.interviewDate,
-        candidate.hrInterviewDate,
-        candidate.userInterviewDate,
-        candidate.cvLink,
-        candidate.portfolioLink,
-        candidate.remarks,
-      ];
       const matchesGlobal =
-        !raw || values.some((value) => value.toLowerCase().includes(raw));
+        !raw ||
+        candidateColumns.some((column) =>
+          candidateSearchValue(candidate, roles, column.key)
+            .toLowerCase()
+            .includes(raw),
+        );
 
       const matchesAdvanced = (
         Object.entries(searchFilters) as [SearchColumn, string][]
@@ -97,6 +112,19 @@ export default function CandidatesPage() {
       return matchesGlobal && matchesAdvanced;
     });
   }, [candidates, roles, roleFilter, statusFilter, searchFilters, searchQuery]);
+
+  const currentPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(filteredCandidates.length / pageSize)),
+  );
+  const paginatedCandidates = filteredCandidates.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
+  useEffect(() => {
+    queueMicrotask(() => setPage(1));
+  }, [roleFilter, statusFilter, searchFilters, searchQuery, pageSize]);
 
   function updateSearchFilter(column: SearchColumn, value: string) {
     setSearchFilters((current) => ({ ...current, [column]: value }));
@@ -121,6 +149,10 @@ export default function CandidatesPage() {
     setSelectedCandidate(null);
   }
 
+  function exportCandidates() {
+    exportCandidatesToExcel(filteredCandidates, roles);
+  }
+
   return (
     <section className="space-y-6">
       <div className="card">
@@ -131,17 +163,17 @@ export default function CandidatesPage() {
 
           <div className="w-full max-w-md">
             <label className="block">
-              <span className="sr-only">Search candidate name</span>
+              <span className="sr-only">Search candidate</span>
               <div className="flex items-center gap-2">
                 <input
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search all candidate columns..."
                   className="input border-slate-300 bg-slate-100"
                 />
                 <button
                   type="button"
-                  onClick={() => setSearchOpen((s) => !s)}
+                  onClick={() => setSearchOpen((state) => !state)}
                   className="shrink-0 rounded-2xl bg-slate-100 px-4 py-2 text-sm font-black transition hover:bg-slate-200"
                 >
                   Advanced Search
@@ -154,86 +186,44 @@ export default function CandidatesPage() {
         {searchOpen && (
           <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <Field label="Candidate Name">
-                <input
-                  value={searchFilters.name}
-                  onChange={(e) => updateSearchFilter("name", e.target.value)}
-                  className="input"
-                />
-              </Field>
-              <Field label="Position">
-                <input
-                  value={searchFilters.position}
-                  onChange={(e) =>
-                    updateSearchFilter("position", e.target.value)
-                  }
-                  className="input"
-                />
-              </Field>
-              <Field label="Level">
-                <input
-                  value={searchFilters.level}
-                  onChange={(e) => updateSearchFilter("level", e.target.value)}
-                  className="input"
-                />
-              </Field>
-              <Field label="Interview Date">
-                <input
-                  value={searchFilters.interviewDate}
-                  onChange={(e) =>
-                    updateSearchFilter("interviewDate", e.target.value)
-                  }
-                  className="input"
-                />
-              </Field>
-              <Field label="CV">
-                <input
-                  value={searchFilters.cvLink}
-                  onChange={(e) => updateSearchFilter("cvLink", e.target.value)}
-                  className="input"
-                />
-              </Field>
-              <Field label="Portfolio">
-                <input
-                  value={searchFilters.portfolioLink}
-                  onChange={(e) =>
-                    updateSearchFilter("portfolioLink", e.target.value)
-                  }
-                  className="input"
-                />
-              </Field>
-              <Field label="Remarks">
-                <input
-                  value={searchFilters.remarks}
-                  onChange={(e) => updateSearchFilter("remarks", e.target.value)}
-                  className="input"
-                />
-              </Field>
-              <Field label="Role">
+              {candidateColumns.map((column) => (
+                <Field key={column.key} label={column.label}>
+                  <input
+                    value={searchFilters[column.key]}
+                    onChange={(event) =>
+                      updateSearchFilter(column.key, event.target.value)
+                    }
+                    className="input"
+                  />
+                </Field>
+              ))}
+
+              <Field label="Role Filter">
                 <select
                   value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
+                  onChange={(event) => setRoleFilter(event.target.value)}
                   className="input"
                 >
                   <option value="all">All Roles</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
+                  <option value="talent-pool">Talent Pool</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
                     </option>
                   ))}
                 </select>
               </Field>
 
-              <Field label="Status">
+              <Field label="Status Filter">
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(event) => setStatusFilter(event.target.value)}
                   className="input"
                 >
                   <option value="all">All Status</option>
-                  {candidateStatuses.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
+                  {candidateStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
                     </option>
                   ))}
                 </select>
@@ -254,96 +244,32 @@ export default function CandidatesPage() {
       </div>
 
       <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
-        <table className="w-full min-w-[2400px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[3600px] border-collapse text-left text-sm">
           <thead className="bg-slate-950 text-white">
             <tr>
               <th className="px-4 py-3">No</th>
-              <th className="px-4 py-3">Candidate Name</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Position</th>
-              <th className="px-4 py-3">Level</th>
-              <th className="px-4 py-3">LinkedIn Profile</th>
-              <th className="px-4 py-3">Summary Interview HR</th>
-              <th className="px-4 py-3">CV</th>
-              <th className="px-4 py-3">Portfolio</th>
-              <th className="px-4 py-3">Psychological Test</th>
-              <th className="px-4 py-3">Feedback From User</th>
-              <th className="px-4 py-3">Remarks</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Interview Date</th>
-              <th className="px-4 py-3">HR Interview Date</th>
-              <th className="px-4 py-3">User Interview Date</th>
-              <th className="px-4 py-3">Created At</th>
+              {candidateColumns.map((column) => (
+                <th key={column.key} className="px-4 py-3">
+                  {column.label}
+                </th>
+              ))}
               <th className="px-4 py-3 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {filteredCandidates.map((candidate, index) => (
+            {paginatedCandidates.map((candidate, index) => (
               <tr key={candidate.id} className="align-top">
-                <td className="max-w-[180px] px-4 py-4 text-xs text-slate-500">
-                  {index + 1}
+                <td className="px-4 py-4 text-xs text-slate-500">
+                  {(currentPage - 1) * pageSize + index + 1}
                 </td>
-                <td className="px-4 py-4">
-                  <p className="font-black">{candidate.nameOfCandidate}</p>
-                  <p className="text-xs text-slate-500">
-                    {candidate.position} · {candidate.level || "-"}
-                  </p>
-                </td>
-                <td className="px-4 py-4 text-slate-600">
-                  {getRoleName(roles, candidate.roleId)}
-                </td>
-                <td className="px-4 py-4 text-slate-600">
-                  {candidate.position || "-"}
-                </td>
-                <td className="px-4 py-4 text-slate-600">
-                  {candidate.level || "-"}
-                </td>
-                <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {truncateText(candidate.linkedInProfile)}
-                </td>
-                <td className="max-w-sm px-4 py-4 text-slate-600">
-                  {truncateText(candidate.summaryInterviewHr)}
-                </td>
-                <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {truncateText(candidate.cvLink)}
-                </td>
-                <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {truncateText(candidate.portfolioLink)}
-                </td>
-                <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {truncateText(candidate.psychologicalTest)}
-                </td>
-                <td className="max-w-sm px-4 py-4 text-slate-600">
-                  {truncateText(candidate.feedbackFromUser)}
-                </td>
-                <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {truncateText(candidate.remarks)}
-                </td>
-                <td className="px-4 py-4">
-                  <span
-                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
-                      candidate.status,
-                    )}`}
+                {candidateColumns.map((column) => (
+                  <td
+                    key={column.key}
+                    className="max-w-xs px-4 py-4 text-slate-600"
                   >
-                    {candidate.status}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-slate-600">
-                  <p>Main: {candidate.interviewDate || "-"}</p>
-                  <p className="text-xs text-slate-400">
-                    HR: {candidate.hrInterviewDate || "-"} · User:{" "}
-                    {candidate.userInterviewDate || "-"}
-                  </p>
-                </td>
-                <td className="px-4 py-4 text-slate-600">
-                  {candidate.hrInterviewDate || "-"}
-                </td>
-                <td className="px-4 py-4 text-slate-600">
-                  {candidate.userInterviewDate || "-"}
-                </td>
-                <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {candidate.createdAt || "-"}
-                </td>
+                    {renderCandidateValue(candidate, roles, column.key)}
+                  </td>
+                ))}
                 <td className="px-4 py-4">
                   <div className="flex justify-end gap-2">
                     <button
@@ -372,7 +298,7 @@ export default function CandidatesPage() {
             {filteredCandidates.length === 0 && (
               <tr>
                 <td
-                  colSpan={18}
+                  colSpan={candidateColumns.length + 2}
                   className="px-4 py-8 text-center text-slate-500"
                 >
                   Belum ada kandidat.
@@ -384,25 +310,42 @@ export default function CandidatesPage() {
       </div>
 
       <div className="space-y-3 lg:hidden">
-        {filteredCandidates.map((candidate) => (
+        {paginatedCandidates.map((candidate) => (
           <div key={candidate.id} className="card">
-            <p className="text-lg font-black">{candidate.nameOfCandidate}</p>
-            <p className="mt-1 text-sm text-slate-500">
-              {candidate.position} · {getRoleName(roles, candidate.roleId)}
+            <p className="text-lg font-black">
+              <InteractiveValue value={candidate.nameOfCandidate} />
             </p>
-            <span
-              className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
-                candidate.status,
-              )}`}
-            >
-              {candidate.status}
-            </span>
+            <p className="mt-1 text-sm text-slate-500">
+              <InteractiveValue value={candidate.position} /> /{" "}
+              <InteractiveValue value={getRoleName(roles, candidate.roleId)} />
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span
+                className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
+                  candidate.status,
+                )}`}
+              >
+                {candidate.status}
+              </span>
+              {candidate.progress && (
+                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                  {candidate.progress}
+                </span>
+              )}
+            </div>
 
             <div className="mt-4 space-y-2 text-sm text-slate-600">
-              <p>Interview: {candidate.interviewDate || "-"}</p>
-              <p>CV: {candidate.cvLink || "-"}</p>
-              <p>Portfolio: {candidate.portfolioLink || "-"}</p>
-              <p>Remarks: {candidate.remarks || "-"}</p>
+              <p>Email: {renderCandidateValue(candidate, roles, "email")}</p>
+              <p>No. HP: {renderCandidateValue(candidate, roles, "phoneNumber")}</p>
+              <p>
+                Pool Date: <InteractiveValue value={candidate.poolDate} />
+              </p>
+              <p>
+                Rating: <InteractiveValue value={candidate.rating} />
+              </p>
+              <p>
+                Catatan: <InteractiveValue value={candidate.remarks} />
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
@@ -429,6 +372,24 @@ export default function CandidatesPage() {
         ))}
       </div>
 
+      <PaginationControls
+        page={currentPage}
+        pageSize={pageSize}
+        totalItems={filteredCandidates.length}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={exportCandidates}
+          className="secondary-button"
+        >
+          Export to Excel
+        </button>
+      </div>
+
       <ConfirmDialog
         open={!!selectedCandidate}
         title="Delete Candidate?"
@@ -447,12 +408,6 @@ export default function CandidatesPage() {
   );
 }
 
-function truncateText(value: string, maxLength = 80) {
-  if (!value) return "-";
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength)}...`;
-}
-
 function CandidateDetailDialog({
   candidate,
   roles,
@@ -464,24 +419,13 @@ function CandidateDetailDialog({
 }) {
   if (!candidate) return null;
 
-  const rows: { label: string; value: string }[] = [
-    { label: "ID", value: candidate.id },
-    { label: "Role", value: getRoleName(roles, candidate.roleId) },
-    { label: "Position", value: candidate.position },
-    { label: "Level", value: candidate.level },
-    { label: "Name Of Candidate", value: candidate.nameOfCandidate },
-    { label: "LinkedIn Profile", value: candidate.linkedInProfile },
-    { label: "Summary Interview HR", value: candidate.summaryInterviewHr },
-    { label: "CV", value: candidate.cvLink },
-    { label: "Portfolio", value: candidate.portfolioLink },
-    { label: "Psychological Test", value: candidate.psychologicalTest },
-    { label: "Feedback From User", value: candidate.feedbackFromUser },
-    { label: "Remarks", value: candidate.remarks },
-    { label: "Status", value: candidate.status },
-    { label: "Interview Date", value: candidate.interviewDate },
-    { label: "HR Interview Date", value: candidate.hrInterviewDate },
-    { label: "User Interview Date", value: candidate.userInterviewDate },
-    { label: "Created At", value: candidate.createdAt },
+  const rows = [
+    { label: "ID", value: candidate.id, key: null },
+    ...candidateColumns.map((column) => ({
+      label: column.label,
+      value: candidateSearchValue(candidate, roles, column.key),
+      key: column.key,
+    })),
   ];
 
   return (
@@ -505,12 +449,14 @@ function CandidateDetailDialog({
           {rows.map((row) => (
             <div
               key={row.label}
-              className="grid gap-2 p-4 text-sm md:grid-cols-[220px_1fr]"
+              className="grid gap-2 p-4 text-sm md:grid-cols-[240px_1fr]"
             >
               <p className="font-black text-slate-700">{row.label}</p>
-              <p className="whitespace-pre-wrap break-words text-slate-600">
-                {row.value || "-"}
-              </p>
+              <div className="whitespace-pre-wrap break-words text-slate-600">
+                {row.key
+                  ? renderCandidateValue(candidate, roles, row.key, false)
+                  : row.value || "-"}
+              </div>
             </div>
           ))}
         </div>
@@ -524,21 +470,69 @@ function candidateSearchValue(
   roles: Role[],
   column: SearchColumn,
 ) {
-  if (column === "name") return candidate.nameOfCandidate;
   if (column === "role") return getRoleName(roles, candidate.roleId);
-  if (column === "status") return candidate.status;
-  if (column === "position") return candidate.position;
-  if (column === "level") return candidate.level;
-  if (column === "interviewDate") {
-    return [
-      candidate.interviewDate,
-      candidate.hrInterviewDate,
-      candidate.userInterviewDate,
-    ].join(" ");
+  return String(candidate[column] || "");
+}
+
+function renderCandidateValue(
+  candidate: Candidate,
+  roles: Role[],
+  column: SearchColumn,
+  truncate = true,
+) {
+  const value = candidateSearchValue(candidate, roles, column);
+  if (!value) return "-";
+
+  if (column === "status") {
+    return (
+      <span
+        className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
+          candidate.status,
+        )}`}
+      >
+        {candidate.status}
+      </span>
+    );
   }
-  if (column === "cvLink") return candidate.cvLink;
-  if (column === "portfolioLink") return candidate.portfolioLink;
-  return candidate.remarks;
+
+  return <InteractiveValue value={value} truncate={truncate} />;
+}
+
+function exportCandidatesToExcel(candidates: Candidate[], roles: Role[]) {
+  const headers = ["ID", ...candidateColumns.map((column) => column.label)];
+  const rows = candidates.map((candidate) => [
+    candidate.id,
+    ...candidateColumns.map((column) =>
+      candidateSearchValue(candidate, roles, column.key),
+    ),
+  ]);
+  const tableRows = [headers, ...rows]
+    .map(
+      (row) =>
+        `<tr>${row
+          .map((cell) => `<td>${escapeHtml(String(cell || ""))}</td>`)
+          .join("")}</tr>`,
+    )
+    .join("");
+  const html = `<html><head><meta charset="UTF-8" /></head><body><table>${tableRows}</table></body></html>`;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `candidate-export-${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function Field({

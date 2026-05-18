@@ -13,8 +13,10 @@ export default function EditRolePage() {
   const [role, setRole] = useState<Role | null>(null);
 
   useEffect(() => {
-    const found = loadRoles().find((item) => item.id === id) || null;
-    setRole(found);
+    queueMicrotask(() => {
+      const found = loadRoles().find((item) => item.id === id) || null;
+      setRole(found);
+    });
   }, [id]);
 
   function handleSubmit(data: Omit<Role, "id" | "createdAt">) {

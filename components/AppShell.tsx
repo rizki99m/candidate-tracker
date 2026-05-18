@@ -8,6 +8,7 @@ const navItems = [
   { label: "Dashboard", href: "/" },
   { label: "Roles", href: "/roles" },
   { label: "Candidates", href: "/candidates" },
+  { label: "Hire Request", href: "/hire-requests" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (href === "/") return pathname === "/";
     if (href === "/candidates") return pathname === "/candidates";
     if (href === "/roles") return pathname === "/roles";
+    if (href === "/hire-requests") return pathname.startsWith("/hire-requests");
     return pathname === href;
   }
 

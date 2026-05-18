@@ -2,10 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { InteractiveValue } from "@/components/InteractiveValue";
+import {
+  PageSize,
+  PaginationControls,
+} from "@/components/PaginationControls";
 import {
   Candidate,
   DateFilter,
   Role,
+  candidateStatuses,
   filterCandidates,
   getRoleName,
   loadCandidates,
@@ -15,14 +21,17 @@ import {
   statusColor,
 } from "@/lib/recruitment";
 
-type SearchColumn = "name" | "role" | "status" | "position";
-const dashboardStatuses: Candidate["status"][] = [
-  "HR Interview",
-  "User Interview",
-  "Offering",
-  "Rejected",
-  "Withdraw",
-];
+type SearchColumn =
+  | "name"
+  | "role"
+  | "status"
+  | "position"
+  | "email"
+  | "phone"
+  | "department"
+  | "source"
+  | "location";
+const dashboardStatuses: Candidate["status"][] = candidateStatuses;
 
 export default function DashboardPage() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -39,10 +48,14 @@ export default function DashboardPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchColumn, setSearchColumn] = useState<SearchColumn>("name");
   const [searchQuery, setSearchQuery] = useState("");
+  const [latestPage, setLatestPage] = useState(1);
+  const [latestPageSize, setLatestPageSize] = useState<PageSize>(10);
 
   useEffect(() => {
-    setRoles(loadRoles());
-    setCandidates(loadCandidates());
+    queueMicrotask(() => {
+      setRoles(loadRoles());
+      setCandidates(loadCandidates());
+    });
   }, []);
 
   const filteredCandidates = useMemo(() => {
@@ -99,7 +112,6 @@ export default function DashboardPage() {
   const totalRejected = filteredCandidates.filter(
     (candidate) => candidate.status === "Rejected",
   ).length;
-
   const statusSummary = dashboardStatuses.map((status) => ({
     status,
     count: statusDistributionCandidates.filter(
@@ -107,12 +119,40 @@ export default function DashboardPage() {
     ).length,
   }));
 
-  const roleSummary = roles.map((role) => ({
-    role,
-    count: filteredCandidates.filter(
-      (candidate) => candidate.roleId === role.id,
-    ).length,
-  }));
+  const roleSummary = [
+    {
+      label: "Talent Pool",
+      count: filteredCandidates.filter((candidate) => !candidate.roleId).length,
+    },
+    ...roles.map((role) => ({
+      label: role.name,
+      count: filteredCandidates.filter(
+        (candidate) => candidate.roleId === role.id,
+      ).length,
+    })),
+  ];
+
+  const currentLatestPage = Math.min(
+    latestPage,
+    Math.max(1, Math.ceil(filteredCandidates.length / latestPageSize)),
+  );
+  const paginatedLatestCandidates = filteredCandidates.slice(
+    (currentLatestPage - 1) * latestPageSize,
+    currentLatestPage * latestPageSize,
+  );
+
+  useEffect(() => {
+    queueMicrotask(() => setLatestPage(1));
+  }, [
+    dateFilter,
+    roleFilter,
+    statusFilter,
+    customStart,
+    customEnd,
+    searchColumn,
+    searchQuery,
+    latestPageSize,
+  ]);
 
   function handleReset() {
     const ok = window.confirm("Reset semua demo data ke data awal?");
@@ -196,6 +236,11 @@ export default function DashboardPage() {
                   <option value="role">Role</option>
                   <option value="status">Status</option>
                   <option value="position">Position</option>
+                  <option value="email">Email</option>
+                  <option value="phone">No. HP</option>
+                  <option value="department">Department</option>
+                  <option value="source">Source</option>
+                  <option value="location">Location</option>
                 </select>
               </label>
 
@@ -234,6 +279,7 @@ export default function DashboardPage() {
                   className="input"
                 >
                   <option value="all">All Roles</option>
+                  <option value="talent-pool">Talent Pool</option>
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
@@ -289,7 +335,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Candidates" value={totalCandidates} />
+        <MetricCard label="Talent Pool" value={totalCandidates} />
         <MetricCard label="In Process" value={totalInProcess} />
         <MetricCard label="Hired" value={totalHired} />
         <MetricCard label="Rejected" value={totalRejected} />
@@ -351,7 +397,7 @@ export default function DashboardPage() {
 
           <BarChart
             data={roleSummary.map((item) => ({
-              label: item.role.name,
+              label: item.label,
               value: item.count,
             }))}
           />
@@ -378,28 +424,44 @@ export default function DashboardPage() {
         </div>
 
         <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 md:block">
-          <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
             <thead className="bg-slate-950 text-white">
               <tr>
                 <th className="px-4 py-3">Candidate</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">No. HP</th>
                 <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Interview Date</th>
+                <th className="px-4 py-3">Pool Date</th>
                 <th className="px-4 py-3">Remarks</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
-              {filteredCandidates.slice(0, 8).map((candidate) => (
+              {paginatedLatestCandidates.map((candidate) => (
                 <tr key={candidate.id}>
                   <td className="px-4 py-4">
-                    <p className="font-black">{candidate.nameOfCandidate}</p>
+                    <p className="font-black">
+                      <InteractiveValue value={candidate.nameOfCandidate} />
+                    </p>
                     <p className="text-xs text-slate-500">
-                      {candidate.position}
+                      <InteractiveValue value={candidate.position} />
                     </p>
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    {getRoleName(roles, candidate.roleId)}
+                    <InteractiveValue value={candidate.email} />
+                  </td>
+                  <td className="px-4 py-4 text-slate-600">
+                    <InteractiveValue value={candidate.phoneNumber} />
+                  </td>
+                  <td className="px-4 py-4 text-slate-600">
+                    <InteractiveValue
+                      value={getRoleName(roles, candidate.roleId)}
+                    />
+                  </td>
+                  <td className="px-4 py-4 text-slate-600">
+                    <InteractiveValue value={candidate.source} />
                   </td>
                   <td className="px-4 py-4">
                     <span
@@ -411,10 +473,12 @@ export default function DashboardPage() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    {candidate.interviewDate || "-"}
+                    <InteractiveValue
+                      value={candidate.poolDate || candidate.interviewDate}
+                    />
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    {candidate.remarks || "-"}
+                    <InteractiveValue value={candidate.remarks} />
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex justify-end">
@@ -434,14 +498,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-3 md:hidden">
-          {filteredCandidates.slice(0, 8).map((candidate) => (
+          {paginatedLatestCandidates.map((candidate) => (
             <div
               key={candidate.id}
               className="rounded-2xl border border-slate-200 bg-white p-4"
             >
-              <p className="font-black">{candidate.nameOfCandidate}</p>
+              <p className="font-black">
+                <InteractiveValue value={candidate.nameOfCandidate} />
+              </p>
               <p className="mt-1 text-sm text-slate-500">
-                {candidate.position} · {getRoleName(roles, candidate.roleId)}
+                <InteractiveValue value={candidate.position} /> /{" "}
+                <InteractiveValue value={getRoleName(roles, candidate.roleId)} />
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                <InteractiveValue value={candidate.email} /> /{" "}
+                <InteractiveValue value={candidate.phoneNumber} />
               </p>
               <span
                 className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
@@ -451,7 +522,8 @@ export default function DashboardPage() {
                 {candidate.status}
               </span>
               <p className="mt-3 text-sm text-slate-600">
-                {candidate.remarks || "-"}
+                Pool: <InteractiveValue value={candidate.poolDate} /> /{" "}
+                <InteractiveValue value={candidate.remarks} />
               </p>
               <button
                 type="button"
@@ -462,6 +534,16 @@ export default function DashboardPage() {
               </button>
             </div>
           ))}
+        </div>
+
+        <div className="mt-5">
+          <PaginationControls
+            page={currentLatestPage}
+            pageSize={latestPageSize}
+            totalItems={filteredCandidates.length}
+            onPageChange={setLatestPage}
+            onPageSizeChange={setLatestPageSize}
+          />
         </div>
       </div>
 
@@ -493,6 +575,26 @@ function matchesDashboardSearch(
 
   if (searchColumn === "status") {
     return candidate.status.toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "email") {
+    return candidate.email.toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "phone") {
+    return candidate.phoneNumber.toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "department") {
+    return candidate.department.toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "source") {
+    return candidate.source.toLowerCase().includes(raw);
+  }
+
+  if (searchColumn === "location") {
+    return candidate.location.toLowerCase().includes(raw);
   }
 
   return candidate.position.toLowerCase().includes(raw);
@@ -543,6 +645,17 @@ function CandidateDetailDialog({
     { label: "Position", value: candidate.position },
     { label: "Level", value: candidate.level },
     { label: "Name Of Candidate", value: candidate.nameOfCandidate },
+    { label: "Email", value: candidate.email },
+    { label: "No. HP", value: candidate.phoneNumber },
+    { label: "Department", value: candidate.department },
+    { label: "Source", value: candidate.source },
+    { label: "Pool Date", value: candidate.poolDate },
+    { label: "Pengalaman Kerja (Tahun)", value: candidate.workExperienceYears },
+    { label: "Pendidikan", value: candidate.education },
+    { label: "Universitas", value: candidate.university },
+    { label: "Jurusan", value: candidate.major },
+    { label: "Lokasi", value: candidate.location },
+    { label: "Rating (1-5)", value: candidate.rating },
     { label: "LinkedIn Profile", value: candidate.linkedInProfile },
     { label: "Summary Interview HR", value: candidate.summaryInterviewHr },
     { label: "CV", value: candidate.cvLink },
@@ -551,6 +664,7 @@ function CandidateDetailDialog({
     { label: "Feedback From User", value: candidate.feedbackFromUser },
     { label: "Remarks", value: candidate.remarks },
     { label: "Status", value: candidate.status },
+    { label: "Progress", value: candidate.progress },
     { label: "Interview Date", value: candidate.interviewDate },
     { label: "HR Interview Date", value: candidate.hrInterviewDate },
     { label: "User Interview Date", value: candidate.userInterviewDate },
@@ -582,7 +696,7 @@ function CandidateDetailDialog({
             >
               <p className="font-black text-slate-700">{row.label}</p>
               <p className="whitespace-pre-wrap break-words text-slate-600">
-                {row.value || "-"}
+                <InteractiveValue value={row.value} truncate={false} />
               </p>
             </div>
           ))}
@@ -611,21 +725,40 @@ function DonutChart({
     );
   }
 
-  let currentAngle = -90;
   const segments = data
     .filter((item) => item.count > 0)
-    .map((item) => {
+    .reduce<
+      (typeof data[number] & {
+        endAngle: number;
+        path: string;
+        activePath: string;
+      })[]
+    >((items, item) => {
+      const currentAngle =
+        items.length === 0
+          ? -90
+          : items[items.length - 1].endAngle;
       const angle = (item.count / total) * 360;
       const startAngle = currentAngle;
       const endAngle = currentAngle + Math.min(angle, 359.99);
-      currentAngle = endAngle;
 
-      return {
-        ...item,
-        path: describeDonutArc(128, 128, 112, 62, startAngle, endAngle),
-        activePath: describeDonutArc(128, 128, 118, 56, startAngle, endAngle),
-      };
-    });
+      return [
+        ...items,
+        {
+          ...item,
+          endAngle,
+          path: describeDonutArc(128, 128, 112, 62, startAngle, endAngle),
+          activePath: describeDonutArc(
+            128,
+            128,
+            118,
+            56,
+            startAngle,
+            endAngle,
+          ),
+        },
+      ];
+    }, []);
 
   return (
     <div className="flex justify-center">

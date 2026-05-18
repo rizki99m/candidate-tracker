@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { InteractiveValue } from "@/components/InteractiveValue";
+import {
+  PageSize,
+  PaginationControls,
+} from "@/components/PaginationControls";
 import { Role, loadCandidates, loadRoles, saveRoles } from "@/lib/recruitment";
 
 type SearchColumn = "name" | "department" | "level" | "status" | "notes";
@@ -22,9 +27,11 @@ export default function RolesPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilters, setSearchFilters] = useState(emptySearchFilters);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(10);
 
   useEffect(() => {
-    setRoles(loadRoles());
+    queueMicrotask(() => setRoles(loadRoles()));
   }, []);
 
   const filteredRoles = useMemo(() => {
@@ -51,6 +58,19 @@ export default function RolesPage() {
       return matchesGlobal && matchesAdvanced;
     });
   }, [roles, searchFilters, searchQuery]);
+
+  const currentPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(filteredRoles.length / pageSize)),
+  );
+  const paginatedRoles = filteredRoles.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
+  useEffect(() => {
+    queueMicrotask(() => setPage(1));
+  }, [searchFilters, searchQuery, pageSize]);
 
   function updateSearchFilter(column: SearchColumn, value: string) {
     setSearchFilters((current) => ({ ...current, [column]: value }));
@@ -181,19 +201,21 @@ export default function RolesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {filteredRoles.map((role, index) => (
+            {paginatedRoles.map((role, index) => (
               <tr key={role.id}>
                 <td className="max-w-[180px] px-4 py-4 text-xs text-slate-500">
-                  {index + 1}
+                  {(currentPage - 1) * pageSize + index + 1}
                 </td>
                 <td className="px-4 py-4">
-                  <p className="font-black">{role.name}</p>
+                  <p className="font-black">
+                    <InteractiveValue value={role.name} />
+                  </p>
                 </td>
                 <td className="px-4 py-4 text-slate-600">
-                  {role.department || "-"}
+                  <InteractiveValue value={role.department} />
                 </td>
                 <td className="px-4 py-4 text-slate-600">
-                  {role.level || "-"}
+                  <InteractiveValue value={role.level} />
                 </td>
                 <td className="px-4 py-4">
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
@@ -201,10 +223,10 @@ export default function RolesPage() {
                   </span>
                 </td>
                 <td className="max-w-xs px-4 py-4 text-slate-600">
-                  {truncateText(role.notes)}
+                  <InteractiveValue value={role.notes} />
                 </td>
                 <td className="px-4 py-4 text-slate-600">
-                  {role.createdAt || "-"}
+                  <InteractiveValue value={role.createdAt} />
                 </td>
                 <td className="px-4 py-4">
                   <div className="flex justify-end gap-2">
@@ -235,13 +257,18 @@ export default function RolesPage() {
       </div>
 
       <div className="space-y-3 md:hidden">
-        {filteredRoles.map((role) => (
+        {paginatedRoles.map((role) => (
           <div key={role.id} className="card">
-            <p className="text-lg font-black">{role.name}</p>
-            <p className="mt-1 text-sm text-slate-500">
-              {role.department || "-"} · {role.level || "-"}
+            <p className="text-lg font-black">
+              <InteractiveValue value={role.name} />
             </p>
-            <p className="mt-3 text-sm text-slate-600">{role.notes || "-"}</p>
+            <p className="mt-1 text-sm text-slate-500">
+              <InteractiveValue value={role.department} /> /{" "}
+              <InteractiveValue value={role.level} />
+            </p>
+            <p className="mt-3 text-sm text-slate-600">
+              <InteractiveValue value={role.notes} />
+            </p>
             <div className="mt-4 grid grid-cols-3 gap-2">
               <button
                 onClick={() => setDetailRole(role)}
@@ -266,6 +293,14 @@ export default function RolesPage() {
         ))}
       </div>
 
+      <PaginationControls
+        page={currentPage}
+        pageSize={pageSize}
+        totalItems={filteredRoles.length}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+
       <ConfirmDialog
         open={!!selectedRole}
         title="Delete Role?"
@@ -278,12 +313,6 @@ export default function RolesPage() {
       <RoleDetailDialog role={detailRole} onClose={() => setDetailRole(null)} />
     </section>
   );
-}
-
-function truncateText(value: string, maxLength = 80) {
-  if (!value) return "-";
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength)}...`;
 }
 
 function RoleDetailDialog({
@@ -328,7 +357,7 @@ function RoleDetailDialog({
             >
               <p className="font-black text-slate-700">{row.label}</p>
               <p className="whitespace-pre-wrap break-words text-slate-600">
-                {row.value || "-"}
+                <InteractiveValue value={row.value} truncate={false} />
               </p>
             </div>
           ))}
