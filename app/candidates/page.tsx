@@ -28,6 +28,13 @@ const candidateColumns: { key: SearchColumn; label: string }[] = [
   { key: "phoneNumber", label: "No. HP" },
   { key: "role", label: "Role" },
   { key: "position", label: "Posisi yang Dilamar" },
+  { key: "status", label: "Status" },
+  { key: "progress", label: "Progress" },
+  { key: "cvLink", label: "CV" },
+];
+
+const candidateDetailColumns: { key: SearchColumn; label: string }[] = [
+  ...candidateColumns,
   { key: "department", label: "Departemen" },
   { key: "level", label: "Level" },
   { key: "source", label: "Sumber" },
@@ -38,15 +45,11 @@ const candidateColumns: { key: SearchColumn; label: string }[] = [
   { key: "major", label: "Jurusan" },
   { key: "location", label: "Lokasi" },
   { key: "rating", label: "Rating (1-5)" },
-  { key: "status", label: "Status" },
-  { key: "progress", label: "Progress" },
   { key: "linkedInProfile", label: "LinkedIn Profile" },
   { key: "summaryInterviewHr", label: "Summary Interview HR" },
-  { key: "cvLink", label: "CV" },
   { key: "portfolioLink", label: "Portfolio" },
   { key: "psychologicalTest", label: "Psychological Test" },
   { key: "feedbackFromUser", label: "Feedback From User" },
-  { key: "remarks", label: "Catatan" },
   { key: "interviewDate", label: "Interview Date" },
   { key: "hrInterviewDate", label: "HR Interview Date" },
   { key: "userInterviewDate", label: "User Interview Date" },
@@ -274,7 +277,7 @@ export default function CandidatesPage() {
       )}
 
       {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
-        <table className="w-full min-w-[3600px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
           <thead className="bg-slate-950 text-white">
             <tr>
               <th className="px-4 py-3">No</th>
@@ -368,13 +371,7 @@ export default function CandidatesPage() {
               <p>Email: {renderCandidateValue(candidate, roles, "email")}</p>
               <p>No. HP: {renderCandidateValue(candidate, roles, "phoneNumber")}</p>
               <p>
-                Pool Date: <InteractiveValue value={candidate.poolDate} />
-              </p>
-              <p>
-                Rating: <InteractiveValue value={candidate.rating} />
-              </p>
-              <p>
-                Catatan: <InteractiveValue value={candidate.remarks} />
+                CV: {renderCandidateValue(candidate, roles, "cvLink")}
               </p>
             </div>
 
@@ -451,7 +448,7 @@ function CandidateDetailDialog({
 
   const rows = [
     { label: "ID", value: candidate.id, key: null },
-    ...candidateColumns.map((column) => ({
+    ...candidateDetailColumns.map((column) => ({
       label: column.label,
       value: candidateSearchValue(candidate, roles, column.key),
       key: column.key,

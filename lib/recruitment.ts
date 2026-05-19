@@ -91,7 +91,6 @@ export type Candidate = {
   portfolioLink: string;
   psychologicalTest: string;
   feedbackFromUser: string;
-  remarks: string;
   status: CandidateStatus;
   progress: CandidateProgress;
   interviewDate: string;

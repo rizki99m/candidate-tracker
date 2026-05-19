@@ -90,7 +90,6 @@ export function mapCandidate(row: Record<string, unknown>) {
     portfolioLink: asString(row.portfolio_link),
     psychologicalTest: asString(row.psychological_test),
     feedbackFromUser: asString(row.feedback_from_user),
-    remarks: asString(row.remarks),
     status: statusName,
     progress: progressName,
     interviewDate: asDateString(row.interview_date),

@@ -66,7 +66,6 @@ export async function GET() {
       c.portfolio_link,
       c.psychological_test,
       c.feedback_from_user,
-      c.remarks,
       c.interview_date,
       c.hr_interview_date,
       c.user_interview_date,
@@ -96,7 +95,7 @@ export async function POST(request: Request) {
       email, phone_number, department, source, pool_date, work_experience_years,
       education, university, major, location, rating, linked_in_profile,
       summary_interview_hr, cv_link, portfolio_link, psychological_test,
-      feedback_from_user, remarks, interview_date, hr_interview_date,
+      feedback_from_user, interview_date, hr_interview_date,
       user_interview_date, created_by_user_id
     )
     VALUES (
@@ -123,7 +122,6 @@ export async function POST(request: Request) {
       ${nullableString(body.portfolioLink ?? body.portfolio_link)},
       ${nullableString(body.psychologicalTest ?? body.psychological_test)},
       ${nullableString(body.feedbackFromUser ?? body.feedback_from_user)},
-      ${nullableString(body.remarks)},
       ${nullableDate(body.interviewDate ?? body.interview_date)},
       ${nullableDate(body.hrInterviewDate ?? body.hr_interview_date)},
       ${nullableDate(body.userInterviewDate ?? body.user_interview_date)},
@@ -141,7 +139,7 @@ export async function POST(request: Request) {
       c.email, c.phone_number, c.department, c.source, c.pool_date,
       c.work_experience_years, c.education, c.university, c.major, c.location,
       c.rating, c.linked_in_profile, c.summary_interview_hr, c.cv_link,
-      c.portfolio_link, c.psychological_test, c.feedback_from_user, c.remarks,
+      c.portfolio_link, c.psychological_test, c.feedback_from_user,
       c.interview_date, c.hr_interview_date, c.user_interview_date,
       c.created_at, c.updated_at
     FROM candidates c

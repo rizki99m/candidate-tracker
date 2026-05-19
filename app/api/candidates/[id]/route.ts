@@ -23,7 +23,7 @@ async function findCandidate(id: number) {
       c.email, c.phone_number, c.department, c.source, c.pool_date,
       c.work_experience_years, c.education, c.university, c.major, c.location,
       c.rating, c.linked_in_profile, c.summary_interview_hr, c.cv_link,
-      c.portfolio_link, c.psychological_test, c.feedback_from_user, c.remarks,
+      c.portfolio_link, c.psychological_test, c.feedback_from_user,
       c.interview_date, c.hr_interview_date, c.user_interview_date,
       c.created_at, c.updated_at
     FROM candidates c
@@ -111,7 +111,6 @@ export async function PUT(
       portfolio_link = ${nullableString(body.portfolioLink ?? body.portfolio_link)},
       psychological_test = ${nullableString(body.psychologicalTest ?? body.psychological_test)},
       feedback_from_user = ${nullableString(body.feedbackFromUser ?? body.feedback_from_user)},
-      remarks = ${nullableString(body.remarks)},
       interview_date = ${nullableDate(body.interviewDate ?? body.interview_date)},
       hr_interview_date = ${nullableDate(body.hrInterviewDate ?? body.hr_interview_date)},
       user_interview_date = ${nullableDate(body.userInterviewDate ?? body.user_interview_date)},

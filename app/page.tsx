@@ -27,9 +27,8 @@ type SearchColumn =
   | "position"
   | "email"
   | "phone"
-  | "department"
-  | "source"
-  | "location";
+  | "progress"
+  | "cv";
 const dashboardStatuses: Candidate["status"][] = candidateStatuses;
 
 type DashboardData = {
@@ -285,9 +284,8 @@ export default function DashboardPage() {
                   <option value="position">Position</option>
                   <option value="email">Email</option>
                   <option value="phone">No. HP</option>
-                  <option value="department">Department</option>
-                  <option value="source">Source</option>
-                  <option value="location">Location</option>
+                  <option value="progress">Progress</option>
+                  <option value="cv">CV</option>
                 </select>
               </label>
 
@@ -486,14 +484,14 @@ export default function DashboardPage() {
           <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
             <thead className="bg-slate-950 text-white">
               <tr>
-                <th className="px-4 py-3">Candidate</th>
+                <th className="px-4 py-3">Nama</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">No. HP</th>
                 <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Source</th>
+                <th className="px-4 py-3">Posisi yang Dilamar</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Pool Date</th>
-                <th className="px-4 py-3">Remarks</th>
+                <th className="px-4 py-3">Progress</th>
+                <th className="px-4 py-3">CV</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
@@ -503,9 +501,6 @@ export default function DashboardPage() {
                   <td className="px-4 py-4">
                     <p className="font-black">
                       <InteractiveValue value={candidate.nameOfCandidate} />
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      <InteractiveValue value={candidate.position} />
                     </p>
                   </td>
                   <td className="px-4 py-4 text-slate-600">
@@ -520,7 +515,7 @@ export default function DashboardPage() {
                     />
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    <InteractiveValue value={candidate.source} />
+                    <InteractiveValue value={candidate.position} />
                   </td>
                   <td className="px-4 py-4">
                     <span
@@ -532,12 +527,10 @@ export default function DashboardPage() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    <InteractiveValue
-                      value={candidate.poolDate || candidate.interviewDate}
-                    />
+                    <InteractiveValue value={candidate.progress || "No Progress"} />
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    <InteractiveValue value={candidate.remarks} />
+                    <InteractiveValue value={candidate.cvLink} />
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex justify-end">
@@ -581,8 +574,7 @@ export default function DashboardPage() {
                 {candidate.status}
               </span>
               <p className="mt-3 text-sm text-slate-600">
-                Pool: <InteractiveValue value={candidate.poolDate} /> /{" "}
-                <InteractiveValue value={candidate.remarks} />
+                CV: <InteractiveValue value={candidate.cvLink} />
               </p>
               <button
                 type="button"
@@ -644,16 +636,12 @@ function matchesDashboardSearch(
     return candidate.phoneNumber.toLowerCase().includes(raw);
   }
 
-  if (searchColumn === "department") {
-    return candidate.department.toLowerCase().includes(raw);
+  if (searchColumn === "progress") {
+    return candidate.progress.toLowerCase().includes(raw);
   }
 
-  if (searchColumn === "source") {
-    return candidate.source.toLowerCase().includes(raw);
-  }
-
-  if (searchColumn === "location") {
-    return candidate.location.toLowerCase().includes(raw);
+  if (searchColumn === "cv") {
+    return candidate.cvLink.toLowerCase().includes(raw);
   }
 
   return candidate.position.toLowerCase().includes(raw);
@@ -721,7 +709,6 @@ function CandidateDetailDialog({
     { label: "Portfolio", value: candidate.portfolioLink },
     { label: "Psychological Test", value: candidate.psychologicalTest },
     { label: "Feedback From User", value: candidate.feedbackFromUser },
-    { label: "Remarks", value: candidate.remarks },
     { label: "Status", value: candidate.status },
     { label: "Progress", value: candidate.progress },
     { label: "Interview Date", value: candidate.interviewDate },

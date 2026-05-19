@@ -13,6 +13,17 @@ import {
   todayString,
 } from "@/lib/recruitment";
 
+const educationOptions = ["SMA/SMK", "D1", "D2", "D3", "D4", "S1", "S2", "S3"];
+const sourceOptions = [
+  "Google Form",
+  "LinkedIn",
+  "Kalibrr",
+  "Glints",
+  "Email",
+  "Referral",
+  "Others",
+];
+
 export function CandidateForm({
   roles,
   candidateStatusesLookup = [],
@@ -63,7 +74,6 @@ export function CandidateForm({
     portfolioLink: initialCandidate?.portfolioLink || "",
     psychologicalTest: initialCandidate?.psychologicalTest || "",
     feedbackFromUser: initialCandidate?.feedbackFromUser || "",
-    remarks: initialCandidate?.remarks || "",
     statusId: defaultStatusId,
     progressId: initialCandidate?.progressId || "",
     status: (initialCandidate?.status || candidateStatusesLookup[0]?.name || "HR Interview") as CandidateStatus,
@@ -120,7 +130,6 @@ export function CandidateForm({
       portfolioLink: form.portfolioLink.trim(),
       psychologicalTest: form.psychologicalTest.trim(),
       feedbackFromUser: form.feedbackFromUser.trim(),
-      remarks: form.remarks.trim(),
       statusId: form.statusId,
       progressId: form.progressId,
       status: form.status,
@@ -296,14 +305,20 @@ export function CandidateForm({
 
       <div className="grid gap-4 md:grid-cols-3">
         <Field label="Source">
-          <input
+          <select
             value={form.source}
             onChange={(event) =>
               setForm((current) => ({ ...current, source: event.target.value }))
             }
-            placeholder="Form Applicant / Referral / LinkedIn"
             className="input"
-          />
+          >
+            <option value="">Select source</option>
+            {sourceOptions.map((source) => (
+              <option key={source} value={source}>
+                {source}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <Field label="Pool Date">
@@ -347,7 +362,7 @@ export function CandidateForm({
         </Field>
 
         <Field label="Pendidikan">
-          <input
+          <select
             value={form.education}
             onChange={(event) =>
               setForm((current) => ({
@@ -356,7 +371,14 @@ export function CandidateForm({
               }))
             }
             className="input"
-          />
+          >
+            <option value="">Select education</option>
+            {educationOptions.map((education) => (
+              <option key={education} value={education}>
+                {education}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <Field label="Universitas">
@@ -521,18 +543,6 @@ export function CandidateForm({
           }
           rows={4}
           placeholder="Feedback dari user/interviewer..."
-          className="input"
-        />
-      </Field>
-
-      <Field label="Remarks">
-        <textarea
-          value={form.remarks}
-          onChange={(event) =>
-            setForm((current) => ({ ...current, remarks: event.target.value }))
-          }
-          rows={3}
-          placeholder="REJECT / ON HOLD / Need review / dll"
           className="input"
         />
       </Field>
