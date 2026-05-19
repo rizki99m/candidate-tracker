@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           )}
 
-          <header className="mb-6 rounded-[2rem] border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
+          {/* <header className="mb-6 rounded-[2rem] border border-white bg-white/80 p-5 shadow-sm backdrop-blur">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.25em] text-emerald-700">
@@ -158,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </div>
             </div>
-          </header>
+          </header> */}
 
           {children}
         </section>
