@@ -12,11 +12,10 @@ import {
   DateFilter,
   Role,
   candidateStatuses,
+  fetchCandidates,
+  fetchRoles,
   filterCandidates,
   getRoleName,
-  loadCandidates,
-  loadRoles,
-  resetDemoData,
   statusClass,
   statusColor,
 } from "@/lib/recruitment";
@@ -32,6 +31,19 @@ type SearchColumn =
   | "source"
   | "location";
 const dashboardStatuses: Candidate["status"][] = candidateStatuses;
+
+type DashboardData = {
+  totals: {
+    totalCandidates: number;
+    totalTalentPool: number;
+    totalHired: number;
+    totalRejected: number;
+    totalInProcess: number;
+  };
+  byStatus: { statusName: string; candidateCount: number }[];
+  byRole: { roleName: string; candidateCount: number }[];
+  byProgress: { progressName: string; candidateCount: number }[];
+};
 
 export default function DashboardPage() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -50,12 +62,34 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [latestPage, setLatestPage] = useState(1);
   const [latestPageSize, setLatestPageSize] = useState<PageSize>(10);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setRoles(loadRoles());
-      setCandidates(loadCandidates());
-    });
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        const [rolesData, candidatesData, dashboardResponse] = await Promise.all([
+          fetchRoles(),
+          fetchCandidates(),
+          fetch("/api/dashboard").then((response) => {
+            if (!response.ok) throw new Error("Gagal memuat dashboard.");
+            return response.json() as Promise<DashboardData>;
+          }),
+        ]);
+        setRoles(rolesData);
+        setCandidates(candidatesData);
+        setDashboard(dashboardResponse);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gagal memuat dashboard.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
   }, []);
 
   const filteredCandidates = useMemo(() => {
@@ -101,36 +135,55 @@ export default function DashboardPage() {
     searchQuery,
   ]);
 
-  const totalCandidates = filteredCandidates.length;
-  const totalInProcess = filteredCandidates.filter(
+  const totalCandidates = dashboard?.totals.totalCandidates ?? filteredCandidates.length;
+  const totalTalentPool =
+    dashboard?.totals.totalTalentPool ??
+    filteredCandidates.filter((candidate) => !candidate.roleId).length;
+  const totalInProcess = dashboard?.totals.totalInProcess ?? filteredCandidates.filter(
     (candidate) =>
       !["Hired", "Rejected", "Withdraw"].includes(candidate.status),
   ).length;
-  const totalHired = filteredCandidates.filter(
+  const totalHired = dashboard?.totals.totalHired ?? filteredCandidates.filter(
     (candidate) => candidate.status === "Hired",
   ).length;
-  const totalRejected = filteredCandidates.filter(
+  const totalRejected = dashboard?.totals.totalRejected ?? filteredCandidates.filter(
     (candidate) => candidate.status === "Rejected",
   ).length;
-  const statusSummary = dashboardStatuses.map((status) => ({
-    status,
-    count: statusDistributionCandidates.filter(
-      (candidate) => candidate.status === status,
-    ).length,
-  }));
+  const statusSummary = dashboard?.byStatus.length
+    ? dashboard.byStatus.map((item) => ({
+        status: item.statusName,
+        count: item.candidateCount,
+      }))
+    : dashboardStatuses.map((status) => ({
+        status,
+        count: statusDistributionCandidates.filter(
+          (candidate) => candidate.status === status,
+        ).length,
+      }));
 
-  const roleSummary = [
-    {
-      label: "Talent Pool",
-      count: filteredCandidates.filter((candidate) => !candidate.roleId).length,
-    },
-    ...roles.map((role) => ({
-      label: role.name,
-      count: filteredCandidates.filter(
-        (candidate) => candidate.roleId === role.id,
-      ).length,
-    })),
-  ];
+  const roleSummary = dashboard?.byRole.length
+    ? dashboard.byRole.map((item) => ({
+        label: item.roleName,
+        count: item.candidateCount,
+      }))
+    : [
+        {
+          label: "Talent Pool",
+          count: filteredCandidates.filter((candidate) => !candidate.roleId).length,
+        },
+        ...roles.map((role) => ({
+          label: role.name,
+          count: filteredCandidates.filter(
+            (candidate) => candidate.roleId === role.id,
+          ).length,
+        })),
+      ];
+
+  const progressSummary =
+    dashboard?.byProgress.map((item) => ({
+      label: item.progressName,
+      value: item.candidateCount,
+    })) || [];
 
   const currentLatestPage = Math.min(
     latestPage,
@@ -154,23 +207,6 @@ export default function DashboardPage() {
     latestPageSize,
   ]);
 
-  function handleReset() {
-    const ok = window.confirm("Reset semua demo data ke data awal?");
-    if (!ok) return;
-
-    resetDemoData();
-    setRoles(loadRoles());
-    setCandidates(loadCandidates());
-    setDateFilter("all");
-    setRoleFilter("all");
-    setStatusFilter("all");
-    setCustomStart("");
-    setCustomEnd("");
-    setSearchQuery("");
-    setSearchOpen(false);
-    setSearchColumn("name");
-  }
-
   function clearFilters() {
     setDateFilter("all");
     setRoleFilter("all");
@@ -192,6 +228,17 @@ export default function DashboardPage() {
 
   return (
     <section className="space-y-6">
+      {error && (
+        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      )}
+      {loading && (
+        <div className="card text-sm font-semibold text-slate-500">
+          Loading dashboard...
+        </div>
+      )}
+
       <div>
         <div className="flex justify-end">
           <button
@@ -334,12 +381,25 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Talent Pool" value={totalCandidates} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Total Candidates" value={totalCandidates} />
+        <MetricCard label="Talent Pool" value={totalTalentPool} />
         <MetricCard label="In Process" value={totalInProcess} />
         <MetricCard label="Hired" value={totalHired} />
         <MetricCard label="Rejected" value={totalRejected} />
       </div>
+
+      {progressSummary.length > 0 && (
+        <div className="card flex h-[28rem] flex-col">
+          <div className="mb-5 shrink-0">
+            <h3 className="text-xl font-black">Candidates by Progress</h3>
+            <p className="text-sm text-slate-500">Summary berdasarkan progress</p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+            <BarChart data={progressSummary} />
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="card">
@@ -389,18 +449,20 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="card">
-          <div className="mb-5">
+        <div className="card flex h-[28rem] flex-col">
+          <div className="mb-5 shrink-0">
             <h3 className="text-xl font-black">Candidates by Role</h3>
             <p className="text-sm text-slate-500">Bar chart berdasarkan role</p>
           </div>
 
-          <BarChart
-            data={roleSummary.map((item) => ({
-              label: item.label,
-              value: item.count,
-            }))}
-          />
+          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+            <BarChart
+              data={roleSummary.map((item) => ({
+                label: item.label,
+                value: item.count,
+              }))}
+            />
+          </div>
         </div>
       </div>
 
@@ -414,9 +476,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button onClick={handleReset} className="secondary-button">
-              Reset Demo Data
-            </button>
             <Link href="/candidates/new" className="primary-button">
               Add Candidate
             </Link>
@@ -869,7 +928,9 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
       {data.map((item) => (
         <div key={item.label}>
           <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-            <span className="font-semibold text-slate-700">{item.label}</span>
+            <span className="min-w-0 break-words font-semibold text-slate-700">
+              {item.label}
+            </span>
             <span className="font-black text-slate-950">{item.value}</span>
           </div>
           <div className="h-4 overflow-hidden rounded-full bg-slate-100">

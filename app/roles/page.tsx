@@ -8,7 +8,11 @@ import {
   PageSize,
   PaginationControls,
 } from "@/components/PaginationControls";
-import { Role, loadCandidates, loadRoles, saveRoles } from "@/lib/recruitment";
+import {
+  Role,
+  deleteRole as deleteRoleRequest,
+  fetchRoles,
+} from "@/lib/recruitment";
 
 type SearchColumn = "name" | "department" | "level" | "status" | "notes";
 
@@ -29,9 +33,23 @@ export default function RolesPage() {
   const [searchFilters, setSearchFilters] = useState(emptySearchFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    queueMicrotask(() => setRoles(loadRoles()));
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        setRoles(await fetchRoles());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gagal memuat roles.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
   }, []);
 
   const filteredRoles = useMemo(() => {
@@ -81,24 +99,16 @@ export default function RolesPage() {
     setSearchFilters(emptySearchFilters);
   }
 
-  function deleteRole() {
+  async function deleteRole() {
     if (!selectedRole) return;
 
-    const candidates = loadCandidates();
-    const isUsed = candidates.some(
-      (candidate) => candidate.roleId === selectedRole.id,
-    );
-
-    if (isUsed) {
-      alert("Role ini masih dipakai kandidat. Ubah/hapus kandidatnya dulu.");
+    try {
+      await deleteRoleRequest(selectedRole.id);
+      setRoles((current) => current.filter((role) => role.id !== selectedRole.id));
       setSelectedRole(null);
-      return;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal menghapus role.");
     }
-
-    const updated = roles.filter((role) => role.id !== selectedRole.id);
-    saveRoles(updated);
-    setRoles(updated);
-    setSelectedRole(null);
   }
 
   return (
@@ -186,7 +196,19 @@ export default function RolesPage() {
         )}
       </div>
 
-      <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm md:block">
+      {error && (
+        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="card text-sm font-semibold text-slate-500">
+          Loading roles...
+        </div>
+      )}
+
+      {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm md:block">
         <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
           <thead className="bg-slate-950 text-white">
             <tr>
@@ -254,7 +276,7 @@ export default function RolesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       <div className="space-y-3 md:hidden">
         {paginatedRoles.map((role) => (

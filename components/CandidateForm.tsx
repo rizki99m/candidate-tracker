@@ -6,6 +6,8 @@ import {
   CandidateProgress,
   CandidateStatus,
   candidateProgresses,
+  CandidateProgressLookup,
+  CandidateStatusLookup,
   Role,
   candidateStatuses,
   todayString,
@@ -13,17 +15,32 @@ import {
 
 export function CandidateForm({
   roles,
+  candidateStatusesLookup = [],
+  candidateProgressesLookup = [],
   initialCandidate,
   submitLabel,
   onSubmit,
 }: {
   roles: Role[];
+  candidateStatusesLookup?: CandidateStatusLookup[];
+  candidateProgressesLookup?: CandidateProgressLookup[];
   initialCandidate?: Partial<Candidate>;
   submitLabel: string;
   onSubmit: (
-    data: Omit<Candidate, "id" | "createdAt">
+    data: Omit<
+      Candidate,
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "roleName"
+      | "statusName"
+      | "statusColorHex"
+      | "progressName"
+    >
   ) => void;
 }) {
+  const defaultStatusId =
+    initialCandidate?.statusId || candidateStatusesLookup[0]?.id || "";
   const [form, setForm] = useState({
     roleId: initialCandidate?.roleId || "",
     position: initialCandidate?.position || "",
@@ -47,7 +64,9 @@ export function CandidateForm({
     psychologicalTest: initialCandidate?.psychologicalTest || "",
     feedbackFromUser: initialCandidate?.feedbackFromUser || "",
     remarks: initialCandidate?.remarks || "",
-    status: (initialCandidate?.status || "HR Interview") as CandidateStatus,
+    statusId: defaultStatusId,
+    progressId: initialCandidate?.progressId || "",
+    status: (initialCandidate?.status || candidateStatusesLookup[0]?.name || "HR Interview") as CandidateStatus,
     progress: (initialCandidate?.progress || "") as CandidateProgress,
     interviewDate: initialCandidate?.interviewDate || todayString(),
     hrInterviewDate: initialCandidate?.hrInterviewDate || "",
@@ -102,6 +121,8 @@ export function CandidateForm({
       psychologicalTest: form.psychologicalTest.trim(),
       feedbackFromUser: form.feedbackFromUser.trim(),
       remarks: form.remarks.trim(),
+      statusId: form.statusId,
+      progressId: form.progressId,
       status: form.status,
       progress: form.progress,
       interviewDate: form.interviewDate,
@@ -219,18 +240,25 @@ export function CandidateForm({
 
         <Field label="Status">
           <select
-            value={form.status}
-            onChange={(event) =>
+            value={form.statusId}
+            onChange={(event) => {
+              const selected = candidateStatusesLookup.find(
+                (item) => item.id === event.target.value,
+              );
               setForm((current) => ({
                 ...current,
-                status: event.target.value as CandidateStatus,
-              }))
-            }
+                statusId: event.target.value,
+                status: (selected?.name || event.target.value) as CandidateStatus,
+              }));
+            }}
             className="input"
           >
-            {candidateStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
+            {(candidateStatusesLookup.length
+              ? candidateStatusesLookup
+              : candidateStatuses.map((status) => ({ id: status, name: status }))
+            ).map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.name}
               </option>
             ))}
           </select>
@@ -238,18 +266,28 @@ export function CandidateForm({
 
         <Field label="Progress">
           <select
-            value={form.progress}
-            onChange={(event) =>
+            value={form.progressId}
+            onChange={(event) => {
+              const selected = candidateProgressesLookup.find(
+                (item) => item.id === event.target.value,
+              );
               setForm((current) => ({
                 ...current,
-                progress: event.target.value as CandidateProgress,
-              }))
-            }
+                progressId: event.target.value,
+                progress: (selected?.name || "") as CandidateProgress,
+              }));
+            }}
             className="input"
           >
-            {candidateProgresses.map((progress) => (
-              <option key={progress || "none"} value={progress}>
-                {progress || "No Progress"}
+            <option value="">No Progress</option>
+            {(candidateProgressesLookup.length
+              ? candidateProgressesLookup
+              : candidateProgresses
+                  .filter(Boolean)
+                  .map((progress) => ({ id: progress, name: progress }))
+            ).map((progress) => (
+              <option key={progress.id} value={progress.id}>
+                {progress.name}
               </option>
             ))}
           </select>

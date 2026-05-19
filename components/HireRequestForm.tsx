@@ -4,11 +4,12 @@ import { useState } from "react";
 import {
   HireRequest,
   HireRequestStatus,
+  LookupItem,
   hireRequestStatuses,
   todayString,
 } from "@/lib/recruitment";
 
-type HireRequestFormData = Omit<HireRequest, "id" | "createdAt">;
+type HireRequestFormData = Omit<HireRequest, "id" | "createdAt" | "updatedAt">;
 
 const fieldLabels: { key: keyof HireRequestFormData; label: string }[] = [
   { key: "requestedBy", label: "Requested By" },
@@ -43,10 +44,12 @@ const fieldLabels: { key: keyof HireRequestFormData; label: string }[] = [
 
 export function HireRequestForm({
   initialHireRequest,
+  hireRequestStatusesLookup = [],
   submitLabel,
   onSubmit,
 }: {
   initialHireRequest?: Partial<HireRequest>;
+  hireRequestStatusesLookup?: LookupItem[];
   submitLabel: string;
   onSubmit: (data: HireRequestFormData) => void;
 }) {
@@ -71,6 +74,7 @@ export function HireRequestForm({
     preferencesGender: initialHireRequest?.preferencesGender || "",
     preferencesCandidateResidencies:
       initialHireRequest?.preferencesCandidateResidencies || "",
+    statusId: initialHireRequest?.statusId || hireRequestStatusesLookup[0]?.id || "",
     status: initialHireRequest?.status || "Assigned",
   });
 
@@ -107,6 +111,7 @@ export function HireRequestForm({
       preferencesGender: form.preferencesGender.trim(),
       preferencesCandidateResidencies:
         form.preferencesCandidateResidencies.trim(),
+      statusId: form.statusId,
       status: isEdit ? form.status : "Assigned",
     });
   }
@@ -158,15 +163,28 @@ export function HireRequestForm({
         {isEdit && (
           <Field label="Status">
             <select
-              value={form.status}
-              onChange={(event) =>
-                updateField("status", event.target.value as HireRequestStatus)
-              }
+              value={form.statusId}
+              onChange={(event) => {
+                const selected = hireRequestStatusesLookup.find(
+                  (item) => item.id === event.target.value,
+                );
+                setForm((current) => ({
+                  ...current,
+                  statusId: event.target.value,
+                  status: (selected?.name || event.target.value) as HireRequestStatus,
+                }));
+              }}
               className="input"
             >
-              {hireRequestStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
+              {(hireRequestStatusesLookup.length
+                ? hireRequestStatusesLookup
+                : hireRequestStatuses.map((status) => ({
+                    id: status,
+                    name: status,
+                  }))
+              ).map((status) => (
+                <option key={status.id} value={status.id}>
+                  {status.name}
                 </option>
               ))}
             </select>

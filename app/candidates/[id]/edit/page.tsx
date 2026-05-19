@@ -5,10 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { CandidateForm } from "@/components/CandidateForm";
 import {
   Candidate,
+  CandidateProgressLookup,
+  CandidateStatusLookup,
   Role,
-  loadCandidates,
-  loadRoles,
-  saveCandidates,
+  fetchCandidate,
+  fetchLookups,
+  updateCandidate,
 } from "@/lib/recruitment";
 
 export default function EditCandidatePage() {
@@ -18,27 +20,39 @@ export default function EditCandidatePage() {
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [candidateStatuses, setCandidateStatuses] = useState<CandidateStatusLookup[]>([]);
+  const [candidateProgresses, setCandidateProgresses] = useState<CandidateProgressLookup[]>([]);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setRoles(loadRoles());
-      setCandidate(loadCandidates().find((item) => item.id === id) || null);
+    Promise.all([fetchLookups(), fetchCandidate(id)]).then(([lookups, found]) => {
+      setRoles(
+        lookups.roles.map((role) => ({
+          ...role,
+          statusId: "",
+          status: "Active",
+          notes: "",
+          createdAt: "",
+        })),
+      );
+      setCandidateStatuses(lookups.candidateStatuses);
+      setCandidateProgresses(lookups.candidateProgresses);
+      setCandidate(found);
     });
   }, [id]);
 
-  function handleSubmit(data: Omit<Candidate, "id" | "createdAt">) {
-    const candidates = loadCandidates();
-
-    const updated = candidates.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            ...data,
-          }
-        : item,
-    );
-
-    saveCandidates(updated);
+  async function handleSubmit(
+    data: Omit<
+      Candidate,
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "roleName"
+      | "statusName"
+      | "statusColorHex"
+      | "progressName"
+    >,
+  ) {
+    await updateCandidate(id, data);
     router.push("/candidates");
   }
 
@@ -54,6 +68,8 @@ export default function EditCandidatePage() {
   return (
     <CandidateForm
       roles={roles}
+      candidateStatusesLookup={candidateStatuses}
+      candidateProgressesLookup={candidateProgresses}
       initialCandidate={candidate}
       submitLabel="Update Candidate"
       onSubmit={handleSubmit}

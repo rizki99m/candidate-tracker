@@ -1,33 +1,35 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HireRequestForm } from "@/components/HireRequestForm";
 import {
   HireRequest,
-  createId,
-  loadHireRequests,
-  saveHireRequests,
-  todayString,
+  LookupItem,
+  createHireRequest,
+  fetchLookups,
 } from "@/lib/recruitment";
 
 export default function NewHireRequestPage() {
   const router = useRouter();
+  const [hireRequestStatuses, setHireRequestStatuses] = useState<LookupItem[]>([]);
 
-  function handleSubmit(data: Omit<HireRequest, "id" | "createdAt">) {
-    const hireRequest: HireRequest = {
-      id: createId("hire-request"),
-      createdAt: todayString(),
-      ...data,
-      status: "Assigned",
-    };
+  useEffect(() => {
+    fetchLookups().then((lookups) =>
+      setHireRequestStatuses(lookups.hireRequestStatuses),
+    );
+  }, []);
 
-    const hireRequests = loadHireRequests();
-    saveHireRequests([hireRequest, ...hireRequests]);
+  async function handleSubmit(
+    data: Omit<HireRequest, "id" | "createdAt" | "updatedAt">,
+  ) {
+    await createHireRequest(data);
     router.push("/hire-requests");
   }
 
   return (
     <HireRequestForm
+      hireRequestStatusesLookup={hireRequestStatuses}
       submitLabel="Save Hire Request"
       onSubmit={handleSubmit}
     />

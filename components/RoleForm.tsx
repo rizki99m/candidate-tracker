@@ -1,23 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Role, RoleStatus, roleStatuses } from "@/lib/recruitment";
+import { LookupItem, Role, RoleStatus, roleStatuses } from "@/lib/recruitment";
 
 export function RoleForm({
   initialRole,
+  roleStatusesLookup = [],
   submitLabel,
   onSubmit,
 }: {
   initialRole?: Partial<Role>;
+  roleStatusesLookup?: LookupItem[];
   submitLabel: string;
   onSubmit: (
-    data: Omit<Role, "id" | "createdAt">
+    data: Omit<Role, "id" | "createdAt" | "updatedAt">
   ) => void;
 }) {
   const [form, setForm] = useState({
     name: initialRole?.name || "",
     department: initialRole?.department || "",
     level: initialRole?.level || "",
+    statusId: initialRole?.statusId || roleStatusesLookup[0]?.id || "",
     status: (initialRole?.status || "Active") as RoleStatus,
     notes: initialRole?.notes || "",
   });
@@ -34,6 +37,7 @@ export function RoleForm({
       name: form.name.trim(),
       department: form.department.trim(),
       level: form.level.trim(),
+      statusId: form.statusId,
       status: form.status,
       notes: form.notes.trim(),
     });
@@ -100,18 +104,25 @@ export function RoleForm({
           Status
         </span>
         <select
-          value={form.status}
-          onChange={(event) =>
+          value={form.statusId}
+          onChange={(event) => {
+            const selected = roleStatusesLookup.find(
+              (item) => item.id === event.target.value,
+            );
             setForm((current) => ({
               ...current,
-              status: event.target.value as RoleStatus,
-            }))
-          }
+              statusId: event.target.value,
+              status: (selected?.name || event.target.value) as RoleStatus,
+            }));
+          }}
           className="input"
         >
-          {roleStatuses.map((status) => (
-            <option key={status} value={status}>
-              {status}
+          {(roleStatusesLookup.length
+            ? roleStatusesLookup
+            : roleStatuses.map((status) => ({ id: status, name: status }))
+          ).map((status) => (
+            <option key={status.id} value={status.id}>
+              {status.name}
             </option>
           ))}
         </select>

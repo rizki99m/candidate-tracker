@@ -1,4 +1,4 @@
-export type RoleStatus = "Active" | "Closed";
+export type RoleStatus = "Active" | "Closed" | string;
 
 export type CandidateStatus =
   | "HR Interview"
@@ -7,27 +7,70 @@ export type CandidateStatus =
   | "Hired"
   | "Rejected"
   | "On Hold"
-  | "Withdraw";
+  | "Withdraw"
+  | "No Status"
+  | string;
 
-export type CandidateProgress = "" | "Psychological Test" | "Agency Task";
+export type CandidateProgress =
+  | ""
+  | "Psychological Test"
+  | "Agency Task"
+  | "No Progress"
+  | string;
 
-export type HireRequestStatus = "Assigned" | "In Progress" | "Resolved";
+export type HireRequestStatus = "Assigned" | "In Progress" | "Resolved" | string;
 
 export type DateFilter = "today" | "month" | "year" | "custom" | "all";
+
+export type LookupItem = {
+  id: string;
+  name: string;
+  sortOrder?: number;
+};
+
+export type CandidateStatusLookup = LookupItem & {
+  colorHex?: string;
+  isTerminal?: boolean;
+};
+
+export type CandidateProgressLookup = LookupItem & {
+  isActive?: boolean;
+};
+
+export type RoleLookup = LookupItem & {
+  department: string;
+  level: string;
+};
+
+export type Lookups = {
+  roleStatuses: LookupItem[];
+  candidateStatuses: CandidateStatusLookup[];
+  candidateProgresses: CandidateProgressLookup[];
+  hireRequestStatuses: LookupItem[];
+  roles: RoleLookup[];
+};
 
 export type Role = {
   id: string;
   name: string;
   department: string;
   level: string;
+  statusId: string;
   status: RoleStatus;
   notes: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type Candidate = {
   id: string;
   roleId: string;
+  roleName: string;
+  statusId: string;
+  statusName: string;
+  statusColorHex: string;
+  progressId: string;
+  progressName: string;
   position: string;
   level: string;
   nameOfCandidate: string;
@@ -55,6 +98,7 @@ export type Candidate = {
   hrInterviewDate: string;
   userInterviewDate: string;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type HireRequest = {
@@ -75,8 +119,10 @@ export type HireRequest = {
   ageRange: string;
   preferencesGender: string;
   preferencesCandidateResidencies: string;
+  statusId: string;
   status: HireRequestStatus;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export const candidateStatuses: CandidateStatus[] = [
@@ -103,459 +149,128 @@ export const hireRequestStatuses: HireRequestStatus[] = [
 
 export const roleStatuses: RoleStatus[] = ["Active", "Closed"];
 
-const ROLE_KEY = "recruitment_roles";
-const CANDIDATE_KEY = "recruitment_candidates";
-const HIRE_REQUEST_KEY = "recruitment_hire_requests";
-
-export const seedRoles: Role[] = [
-  {
-    id: "role-busdev",
-    name: "Business Development",
-    department: "Sales",
-    level: "Staff",
-    status: "Active",
-    notes: "Role untuk kandidat Busdev.",
-    createdAt: "2026-05-01",
-  },
-  {
-    id: "role-intern-ae",
-    name: "Intern Account Executive",
-    department: "Account",
-    level: "Intern",
-    status: "Active",
-    notes: "Role untuk kandidat intern AE.",
-    createdAt: "2026-05-01",
-  },
-  {
-    id: "role-account-executive",
-    name: "Account Executive",
-    department: "Account",
-    level: "Staff",
-    status: "Active",
-    notes: "Role untuk kandidat Account Executive.",
-    createdAt: "2026-05-01",
-  },
-  {
-    id: "role-art-director",
-    name: "Art Director",
-    department: "Creative",
-    level: "Senior",
-    status: "Active",
-    notes: "Role untuk kandidat Art Director.",
-    createdAt: "2026-05-01",
-  },
-];
-
-export const seedCandidates: Candidate[] = [
-  {
-    id: "candidate-1",
-    roleId: "role-intern-ae",
-    position: "Intern Account Executive",
-    level: "Intern",
-    nameOfCandidate: "Diego Bayu Bagaskara",
-    email: "diego.bayu@example.com",
-    phoneNumber: "0812719979830",
-    department: "Account",
-    source: "Referral",
-    poolDate: "2026-05-17",
-    workExperienceYears: "1",
-    education: "S1",
-    university: "Universitas Padjadjaran",
-    major: "Marketing Communication",
-    location: "Bandung",
-    rating: "3",
-    linkedInProfile: "LinkedIn Profile",
-    summaryInterviewHr:
-      "+ Pernah handle kerja sama brand. + Komunikasi cukup oke. - Masih perlu adaptasi ke agency.",
-    cvLink: "DIEGO BAYU BAGASKARA_CV.pdf",
-    portfolioLink: "",
-    psychologicalTest: "Diego_BusDev_SkillTest.pdf",
-    feedbackFromUser:
-      "Komunikasi masih kurang clear, belum cukup familiar dengan TikTok.",
-    remarks: "REJECT",
-    status: "Rejected",
-    progress: "",
-    interviewDate: "2026-05-17",
-    hrInterviewDate: "2026-05-17",
-    userInterviewDate: "",
-    createdAt: "2026-05-17",
-  },
-  {
-    id: "candidate-2",
-    roleId: "role-intern-ae",
-    position: "Intern Account Executive",
-    level: "Intern",
-    nameOfCandidate: "Afryan Mahendra",
-    email: "afryan.mahendra@example.com",
-    phoneNumber: "081937326667",
-    department: "Account",
-    source: "Form Applicant",
-    poolDate: "2026-05-18",
-    workExperienceYears: "2",
-    education: "S1",
-    university: "Universitas Indonesia",
-    major: "Business Administration",
-    location: "Jakarta",
-    rating: "4",
-    linkedInProfile: "LinkedIn Profile",
-    summaryInterviewHr:
-      "+ Pengalaman handle B2B. + Komunikasi bagus. + Familiar dengan social media dan Meta Ads.",
-    cvLink: "CV-Afryan Mahendra-BD.pdf",
-    portfolioLink: "",
-    psychologicalTest: "Afryan Mahendra_Busdev_SkillTest.pdf",
-    feedbackFromUser: "",
-    remarks: "Need user review",
-    status: "User Interview",
-    progress: "Psychological Test",
-    interviewDate: "2026-05-18",
-    hrInterviewDate: "2026-05-18",
-    userInterviewDate: "2026-05-20",
-    createdAt: "2026-05-18",
-  },
-  {
-    id: "candidate-3",
-    roleId: "role-art-director",
-    position: "Art Director",
-    level: "Senior",
-    nameOfCandidate: "Alya Algrista",
-    email: "alya.algrista@example.com",
-    phoneNumber: "088223410762",
-    department: "Creative",
-    source: "Talent Pool",
-    poolDate: "2026-05-19",
-    workExperienceYears: "4",
-    education: "S1",
-    university: "Universitas Telkom Bandung",
-    major: "Desain Komunikasi Visual",
-    location: "Garut, Jawa Barat",
-    rating: "4",
-    linkedInProfile: "LinkedIn Profile",
-    summaryInterviewHr:
-      "Portfolio cukup kuat, pengalaman creative direction oke, perlu dicek style fit dengan DOKI.",
-    cvLink: "Alya_CV.pdf",
-    portfolioLink: "Portfolio Link",
-    psychologicalTest: "",
-    feedbackFromUser: "Masuk agency task.",
-    remarks: "Agency task sent",
-    status: "User Interview",
-    progress: "Agency Task",
-    interviewDate: "2026-05-19",
-    hrInterviewDate: "2026-05-19",
-    userInterviewDate: "",
-    createdAt: "2026-05-19",
-  },
-  {
-    id: "candidate-4",
-    roleId: "role-busdev",
-    position: "Business Development",
-    level: "Staff",
-    nameOfCandidate: "Nadila Marsya Andhika",
-    email: "nadila.marsya@example.com",
-    phoneNumber: "081314110769",
-    department: "Sales",
-    source: "LinkedIn",
-    poolDate: "2026-05-21",
-    workExperienceYears: "2",
-    education: "S1",
-    university: "Universitas Brawijaya",
-    major: "Communication",
-    location: "Jakarta",
-    rating: "3",
-    linkedInProfile: "LinkedIn Profile",
-    summaryInterviewHr:
-      "Aktif organisasi, pernah handle sponsorship dan media partner, administratif cukup kuat.",
-    cvLink: "CV Nadila Marsya Andhika.pdf",
-    portfolioLink: "",
-    psychologicalTest: "",
-    feedbackFromUser: "",
-    remarks: "On hold karena availability.",
-    status: "On Hold",
-    progress: "",
-    interviewDate: "2026-05-21",
-    hrInterviewDate: "2026-05-21",
-    userInterviewDate: "",
-    createdAt: "2026-05-21",
-  },
-  {
-    id: "candidate-5",
-    roleId: "role-account-executive",
-    position: "Account Executive",
-    level: "Staff",
-    nameOfCandidate: "Sofia Shanty Sugiyono",
-    email: "sofia.shanty@example.com",
-    phoneNumber: "081225684812",
-    department: "Account",
-    source: "Job Portal",
-    poolDate: "2026-05-22",
-    workExperienceYears: "3",
-    education: "S1",
-    university: "Universitas Pertamina",
-    major: "Komunikasi",
-    location: "Jakarta",
-    rating: "5",
-    linkedInProfile: "LinkedIn Profile",
-    summaryInterviewHr:
-      "Familiar dengan digital marketing, project management, dan data analysis.",
-    cvLink: "Resume_Sofia Shanty Sugiyono.pdf",
-    portfolioLink: "",
-    psychologicalTest: "",
-    feedbackFromUser: "Communication is strong.",
-    remarks: "Proceed offering",
-    status: "Offering",
-    progress: "",
-    interviewDate: "2026-05-22",
-    hrInterviewDate: "2026-05-22",
-    userInterviewDate: "2026-05-24",
-    createdAt: "2026-05-22",
-  },
-  {
-    id: "candidate-6",
-    roleId: "",
-    position: "Business Development",
-    level: "",
-    nameOfCandidate: "Hanny Aulia Arfiana",
-    email: "hn.arfiana@gmail.com",
-    phoneNumber: "081382299972",
-    department: "Engineering",
-    source: "Form Applicant",
-    poolDate: "2026-04-12",
-    workExperienceYears: "",
-    education: "",
-    university: "",
-    major: "",
-    location: "",
-    rating: "",
-    linkedInProfile: "https://linkedin.com/in/hannyaulia",
-    summaryInterviewHr: "",
-    cvLink: "https://drive.google.com/example-hanny-cv",
-    portfolioLink: "",
-    psychologicalTest: "",
-    feedbackFromUser: "",
-    remarks: "Talent pool kandidat potensial untuk Busdev.",
-    status: "HR Interview",
-    progress: "",
-    interviewDate: "",
-    hrInterviewDate: "",
-    userInterviewDate: "",
-    createdAt: "2026-04-12",
-  },
-  {
-    id: "candidate-7",
-    roleId: "",
-    position: "Jr. Art Director",
-    level: "Junior",
-    nameOfCandidate: "Amalia Erza Syafitri",
-    email: "e.amaliasyafitri@gmail.com",
-    phoneNumber: "087754541403",
-    department: "Creative",
-    source: "Form Applicant",
-    poolDate: "2026-04-12",
-    workExperienceYears: "1",
-    education: "S1",
-    university: "Institut Kesenian Jakarta",
-    major: "Desain Komunikasi Visual",
-    location: "Tangerang",
-    rating: "3",
-    linkedInProfile: "",
-    summaryInterviewHr: "",
-    cvLink: "https://drive.google.com/example-amalia-cv",
-    portfolioLink: "https://behance.net/example-amalia",
-    psychologicalTest: "",
-    feedbackFromUser: "",
-    remarks: "Portfolio perlu direview creative lead.",
-    status: "On Hold",
-    progress: "",
-    interviewDate: "",
-    hrInterviewDate: "",
-    userInterviewDate: "",
-    createdAt: "2026-04-12",
-  },
-];
-
-export const seedHireRequests: HireRequest[] = [
-  {
-    id: "hire-request-1",
-    requestedBy: "Rizka Putri",
-    reasonForHiring: "Replacement untuk Account Executive yang resign.",
-    positionTitle: "Account Executive",
-    departmentDivision: "Account",
-    employmentType: "Full Time",
-    teamMembersNeeded: "1",
-    expectedJoinDate: "2026-06-10",
-    descriptionScopeOfWork:
-      "Handle client communication, campaign timeline, report coordination, dan follow up deliverables.",
-    experienceRequirementsSkills:
-      "Minimal 2 tahun di agency, kuat di komunikasi, project management, dan reporting.",
-    additionalNiceToHaveSkills: "Familiar dengan TikTok campaign dan Meta Ads.",
-    workingExperience: "2-4 tahun",
-    educationRequired: "S1",
-    majoringPreferences: "Communication, Marketing, Business",
-    ageRange: "23-30",
-    preferencesGender: "Any",
-    preferencesCandidateResidencies: "Jakarta, Tangerang, Bekasi",
-    status: "In Progress",
-    createdAt: "2026-05-10",
-  },
-  {
-    id: "hire-request-2",
-    requestedBy: "Bima Prasetya",
-    reasonForHiring: "Penambahan kapasitas creative team untuk pitch pipeline.",
-    positionTitle: "Art Director",
-    departmentDivision: "Creative",
-    employmentType: "Full Time",
-    teamMembersNeeded: "1",
-    expectedJoinDate: "2026-06-24",
-    descriptionScopeOfWork:
-      "Develop visual direction, supervise design output, dan translate campaign idea ke key visual.",
-    experienceRequirementsSkills:
-      "Minimal 4 tahun di creative agency, portfolio campaign digital kuat, mampu present concept.",
-    additionalNiceToHaveSkills: "Motion direction, photography, dan AI visual exploration.",
-    workingExperience: "4-6 tahun",
-    educationRequired: "S1",
-    majoringPreferences: "DKV, Visual Communication, Multimedia",
-    ageRange: "26-34",
-    preferencesGender: "Any",
-    preferencesCandidateResidencies: "Jabodetabek",
-    status: "Assigned",
-    createdAt: "2026-05-14",
-  },
-];
-
-function safeParse<T>(value: string | null, fallback: T): T {
-  if (!value) return fallback;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-export function createId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 export function todayString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function loadRoles(): Role[] {
-  if (typeof window === "undefined") return seedRoles;
+async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
 
-  const roles = safeParse<Role[]>(
-    window.localStorage.getItem(ROLE_KEY),
-    seedRoles
-  );
+  const payload = await response.json().catch(() => ({}));
 
-  if (!window.localStorage.getItem(ROLE_KEY)) {
-    saveRoles(seedRoles);
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || "Request failed");
   }
 
-  return roles;
+  return payload as T;
 }
 
-export function saveRoles(roles: Role[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(ROLE_KEY, JSON.stringify(roles));
+export async function fetchRoles() {
+  return apiFetch<Role[]>("/api/roles");
 }
 
-export function loadCandidates(): Candidate[] {
-  if (typeof window === "undefined") return seedCandidates;
-
-  const candidates = safeParse<Partial<Candidate>[]>(
-    window.localStorage.getItem(CANDIDATE_KEY),
-    seedCandidates
-  ).map(normalizeCandidate);
-
-  if (!window.localStorage.getItem(CANDIDATE_KEY)) {
-    saveCandidates(seedCandidates);
-  } else {
-    saveCandidates(candidates);
-  }
-
-  return candidates;
+export async function fetchRole(id: string) {
+  return apiFetch<Role>(`/api/roles/${id}`);
 }
 
-export function saveCandidates(candidates: Candidate[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(CANDIDATE_KEY, JSON.stringify(candidates));
+export async function createRole(data: Omit<Role, "id" | "createdAt" | "updatedAt">) {
+  return apiFetch<Role>("/api/roles", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
-export function resetDemoData() {
-  saveRoles(seedRoles);
-  saveCandidates(seedCandidates);
-  saveHireRequests(seedHireRequests);
+export async function updateRole(
+  id: string,
+  data: Omit<Role, "id" | "createdAt" | "updatedAt">,
+) {
+  return apiFetch<Role>(`/api/roles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
-function normalizeCandidate(candidate: Partial<Candidate>): Candidate {
-  const rawStatus = candidate.status as string | undefined;
-  const statusIsProgress =
-    rawStatus === "Psychological Test" || rawStatus === "Agency Task";
-  const status = candidateStatuses.includes(rawStatus as CandidateStatus)
-    ? (rawStatus as CandidateStatus)
-    : "HR Interview";
-  const progress = candidateProgresses.includes(
-    candidate.progress as CandidateProgress,
-  )
-    ? (candidate.progress as CandidateProgress)
-    : statusIsProgress
-      ? (rawStatus as CandidateProgress)
-      : "";
-
-  return {
-    id: candidate.id || createId("candidate"),
-    roleId: candidate.roleId || "",
-    position: candidate.position || "",
-    level: candidate.level || "",
-    nameOfCandidate: candidate.nameOfCandidate || "",
-    email: candidate.email || "",
-    phoneNumber: candidate.phoneNumber || "",
-    department: candidate.department || "",
-    source: candidate.source || "",
-    poolDate: candidate.poolDate || candidate.createdAt || "",
-    workExperienceYears: candidate.workExperienceYears || "",
-    education: candidate.education || "",
-    university: candidate.university || "",
-    major: candidate.major || "",
-    location: candidate.location || "",
-    rating: candidate.rating || "",
-    linkedInProfile: candidate.linkedInProfile || "",
-    summaryInterviewHr: candidate.summaryInterviewHr || "",
-    cvLink: candidate.cvLink || "",
-    portfolioLink: candidate.portfolioLink || "",
-    psychologicalTest: candidate.psychologicalTest || "",
-    feedbackFromUser: candidate.feedbackFromUser || "",
-    remarks: candidate.remarks || "",
-    status,
-    progress,
-    interviewDate: candidate.interviewDate || "",
-    hrInterviewDate: candidate.hrInterviewDate || "",
-    userInterviewDate: candidate.userInterviewDate || "",
-    createdAt: candidate.createdAt || todayString(),
-  };
+export async function deleteRole(id: string) {
+  return apiFetch<{ success: true }>(`/api/roles/${id}`, { method: "DELETE" });
 }
 
-export function loadHireRequests(): HireRequest[] {
-  if (typeof window === "undefined") return seedHireRequests;
-
-  const hireRequests = safeParse<HireRequest[]>(
-    window.localStorage.getItem(HIRE_REQUEST_KEY),
-    seedHireRequests,
-  );
-
-  if (!window.localStorage.getItem(HIRE_REQUEST_KEY)) {
-    saveHireRequests(seedHireRequests);
-  }
-
-  return hireRequests;
+export async function fetchCandidates() {
+  return apiFetch<Candidate[]>("/api/candidates");
 }
 
-export function saveHireRequests(hireRequests: HireRequest[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(HIRE_REQUEST_KEY, JSON.stringify(hireRequests));
+export async function fetchCandidate(id: string) {
+  return apiFetch<Candidate>(`/api/candidates/${id}`);
 }
 
-export function getRoleName(roles: Role[], roleId: string) {
+export async function createCandidate(
+  data: Omit<Candidate, "id" | "createdAt" | "updatedAt" | "roleName" | "statusName" | "statusColorHex" | "progressName">,
+) {
+  return apiFetch<Candidate>("/api/candidates", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateCandidate(
+  id: string,
+  data: Omit<Candidate, "id" | "createdAt" | "updatedAt" | "roleName" | "statusName" | "statusColorHex" | "progressName">,
+) {
+  return apiFetch<Candidate>(`/api/candidates/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCandidate(id: string) {
+  return apiFetch<{ success: true }>(`/api/candidates/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchHireRequests() {
+  return apiFetch<HireRequest[]>("/api/hire-requests");
+}
+
+export async function fetchHireRequest(id: string) {
+  return apiFetch<HireRequest>(`/api/hire-requests/${id}`);
+}
+
+export async function createHireRequest(
+  data: Omit<HireRequest, "id" | "createdAt" | "updatedAt">,
+) {
+  return apiFetch<HireRequest>("/api/hire-requests", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateHireRequest(
+  id: string,
+  data: Omit<HireRequest, "id" | "createdAt" | "updatedAt">,
+) {
+  return apiFetch<HireRequest>(`/api/hire-requests/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteHireRequest(id: string) {
+  return apiFetch<{ success: true }>(`/api/hire-requests/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchLookups() {
+  return apiFetch<Lookups>("/api/lookups");
+}
+
+export function getRoleName(roles: Role[] | RoleLookup[], roleId: string) {
   if (!roleId) return "Talent Pool";
   return roles.find((role) => role.id === roleId)?.name || "Deleted Role";
 }
@@ -582,7 +297,7 @@ export function isDateInsideFilter(
   rawDate: string,
   filter: DateFilter,
   customStart: string,
-  customEnd: string
+  customEnd: string,
 ) {
   if (filter === "all") return true;
   if (!rawDate) return false;
@@ -599,9 +314,7 @@ export function isDateInsideFilter(
     );
   }
 
-  if (filter === "year") {
-    return date.getFullYear() === now.getFullYear();
-  }
+  if (filter === "year") return date.getFullYear() === now.getFullYear();
 
   if (filter === "custom") {
     if (!customStart && !customEnd) return true;
@@ -626,7 +339,7 @@ export function filterCandidates(
     dateFilter: DateFilter;
     customStart: string;
     customEnd: string;
-  }
+  },
 ) {
   return candidates.filter((candidate) => {
     const matchRole =
@@ -639,13 +352,14 @@ export function filterCandidates(
     const matchStatus =
       params.statusFilter === "all"
         ? true
-        : candidate.status === params.statusFilter;
+        : candidate.statusId === params.statusFilter ||
+          candidate.status === params.statusFilter;
 
     const matchDate = isDateInsideFilter(
       getCandidateMainDate(candidate),
       params.dateFilter,
       params.customStart,
-      params.customEnd
+      params.customEnd,
     );
 
     return matchRole && matchStatus && matchDate;
@@ -653,7 +367,7 @@ export function filterCandidates(
 }
 
 export function statusClass(status: CandidateStatus) {
-  const tones: Record<CandidateStatus, string> = {
+  const tones: Record<string, string> = {
     "HR Interview": "bg-blue-100 text-blue-700 border-blue-200",
     "User Interview": "bg-cyan-100 text-cyan-700 border-cyan-200",
     Offering: "bg-orange-100 text-orange-700 border-orange-200",
@@ -661,13 +375,14 @@ export function statusClass(status: CandidateStatus) {
     Rejected: "bg-rose-100 text-rose-700 border-rose-200",
     "On Hold": "bg-slate-100 text-slate-700 border-slate-200",
     Withdraw: "bg-zinc-100 text-zinc-700 border-zinc-200",
+    "No Status": "bg-slate-100 text-slate-700 border-slate-200",
   };
 
-  return tones[status];
+  return tones[status] || "bg-slate-100 text-slate-700 border-slate-200";
 }
 
 export function statusColor(status: CandidateStatus) {
-  const colors: Record<CandidateStatus, string> = {
+  const colors: Record<string, string> = {
     "HR Interview": "#2563eb",
     "User Interview": "#0891b2",
     Offering: "#ea580c",
@@ -675,17 +390,18 @@ export function statusColor(status: CandidateStatus) {
     Rejected: "#e11d48",
     "On Hold": "#64748b",
     Withdraw: "#71717a",
+    "No Status": "#94a3b8",
   };
 
-  return colors[status];
+  return colors[status] || "#94a3b8";
 }
 
 export function hireRequestStatusClass(status: HireRequestStatus) {
-  const tones: Record<HireRequestStatus, string> = {
+  const tones: Record<string, string> = {
     Assigned: "bg-blue-100 text-blue-700 border-blue-200",
     "In Progress": "bg-amber-100 text-amber-700 border-amber-200",
     Resolved: "bg-emerald-100 text-emerald-700 border-emerald-200",
   };
 
-  return tones[status];
+  return tones[status] || "bg-slate-100 text-slate-700 border-slate-200";
 }

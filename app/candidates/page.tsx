@@ -12,11 +12,11 @@ import {
   Candidate,
   Role,
   candidateStatuses,
+  deleteCandidate as deleteCandidateRequest,
   filterCandidates,
+  fetchCandidates,
+  fetchRoles,
   getRoleName,
-  loadCandidates,
-  loadRoles,
-  saveCandidates,
   statusClass,
 } from "@/lib/recruitment";
 
@@ -74,12 +74,28 @@ export default function CandidatesPage() {
   const [searchFilters, setSearchFilters] = useState(emptySearchFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setRoles(loadRoles());
-      setCandidates(loadCandidates());
-    });
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        const [rolesData, candidatesData] = await Promise.all([
+          fetchRoles(),
+          fetchCandidates(),
+        ]);
+        setRoles(rolesData);
+        setCandidates(candidatesData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gagal memuat data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
   }, []);
 
   const filteredCandidates = useMemo(() => {
@@ -137,16 +153,18 @@ export default function CandidatesPage() {
     setStatusFilter("all");
   }
 
-  function deleteCandidate() {
+  async function deleteCandidate() {
     if (!selectedCandidate) return;
 
-    const updated = candidates.filter(
-      (candidate) => candidate.id !== selectedCandidate.id,
-    );
-
-    saveCandidates(updated);
-    setCandidates(updated);
-    setSelectedCandidate(null);
+    try {
+      await deleteCandidateRequest(selectedCandidate.id);
+      setCandidates((current) =>
+        current.filter((candidate) => candidate.id !== selectedCandidate.id),
+      );
+      setSelectedCandidate(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal menghapus kandidat.");
+    }
   }
 
   function exportCandidates() {
@@ -243,7 +261,19 @@ export default function CandidatesPage() {
         )}
       </div>
 
-      <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
+      {error && (
+        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="card text-sm font-semibold text-slate-500">
+          Loading candidates...
+        </div>
+      )}
+
+      {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
         <table className="w-full min-w-[3600px] border-collapse text-left text-sm">
           <thead className="bg-slate-950 text-white">
             <tr>
@@ -307,7 +337,7 @@ export default function CandidatesPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       <div className="space-y-3 lg:hidden">
         {paginatedCandidates.map((candidate) => (

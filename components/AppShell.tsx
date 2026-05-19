@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { label: "Dashboard", href: "/" },
@@ -14,6 +15,23 @@ const navItems = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [user, setUser] = useState<{
+    fullName: string;
+    username: string;
+    role: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (pathname === "/login") return;
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => setUser(payload?.user || null))
+      .catch(() => setUser(null));
+  }, [pathname]);
+
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -31,12 +49,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             sidebarOpen ? "w-72" : "w-0"
           }`}
         >
-          <div className={`h-full ${sidebarOpen ? "opacity-100" : "opacity-0"}`}>
+          <div
+            className={`h-full ${sidebarOpen ? "opacity-100" : "opacity-0"}`}
+          >
             <div className="flex items-start justify-between gap-4">
               <Link href="/">
-                <p className="text-xs font-bold uppercase tracking-[0.3em] text-emerald-700">
-                  DOKI
-                </p>
+                <Image
+                  src="/doki-logo-yellow.png"
+                  alt="DOKI"
+                  width={192}
+                  height={72}
+                  className="h-auto w-24"
+                />
                 <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
                   Recruitment Tracker
                 </h1>
@@ -45,16 +69,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
-                aria-label="Minimize menu"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200 hover:text-slate-950"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
               >
-                <span aria-hidden="true">{"<"}</span>
+                <PanelCollapseIcon />
               </button>
             </div>
-
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Track kandidat interview berdasarkan role, status, dan tanggal.
-            </p>
 
             <nav className="mt-10 space-y-2">
               {navItems.map((item) => (
@@ -73,13 +94,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
 
             <div className="mt-10 rounded-3xl bg-slate-950 p-5 text-white">
-              <p className="text-sm font-semibold">Frontend Mode</p>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Data sementara masih di localStorage. Nanti kita sambungkan ke
-                database.
+              <p className="text-sm font-semibold">
+                {user?.fullName || "Signed in"}
               </p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-400">
+                {user?.role || "user"}
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/login";
+                }}
+                className="mt-4 w-full rounded-2xl bg-white px-4 py-2 text-sm font-black text-slate-950 transition hover:bg-slate-100"
+              >
+                Logout
+              </button>
             </div>
-
           </div>
         </aside>
 
@@ -88,20 +119,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              aria-label="Expand menu"
-              className="mb-4 hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-950 shadow-sm transition hover:bg-slate-100 lg:inline-flex"
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              className="mb-4 hidden h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 lg:inline-flex"
             >
-              <span
-                aria-hidden="true"
-                className="flex items-center gap-0.5 text-xs font-black leading-none"
-              >
-                <span className="flex flex-col gap-0.5">
-                  <span className="block h-0.5 w-3 rounded-full bg-current" />
-                  <span className="block h-0.5 w-3 rounded-full bg-current" />
-                  <span className="block h-0.5 w-3 rounded-full bg-current" />
-                </span>
-                <span>{">"}</span>
-              </span>
+              <PanelExpandIcon />
             </button>
           )}
 
@@ -142,5 +164,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </section>
       </div>
     </main>
+  );
+}
+
+function PanelCollapseIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d="m15 9-3 3 3 3" />
+    </svg>
+  );
+}
+
+function PanelExpandIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d="m12 9 3 3-3 3" />
+    </svg>
   );
 }

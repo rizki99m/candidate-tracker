@@ -10,9 +10,9 @@ import {
 } from "@/components/PaginationControls";
 import {
   HireRequest,
+  deleteHireRequest as deleteHireRequestRequest,
+  fetchHireRequests,
   hireRequestStatusClass,
-  loadHireRequests,
-  saveHireRequests,
 } from "@/lib/recruitment";
 
 type SearchColumn =
@@ -80,9 +80,25 @@ export default function HireRequestsPage() {
   const [searchFilters, setSearchFilters] = useState(emptySearchFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    queueMicrotask(() => setHireRequests(loadHireRequests()));
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        setHireRequests(await fetchHireRequests());
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Gagal memuat hire requests.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
   }, []);
 
   const filteredHireRequests = useMemo(() => {
@@ -132,16 +148,18 @@ export default function HireRequestsPage() {
     setSearchFilters(emptySearchFilters);
   }
 
-  function deleteHireRequest() {
+  async function deleteHireRequest() {
     if (!selectedHireRequest) return;
 
-    const updated = hireRequests.filter(
-      (hireRequest) => hireRequest.id !== selectedHireRequest.id,
-    );
-
-    saveHireRequests(updated);
-    setHireRequests(updated);
-    setSelectedHireRequest(null);
+    try {
+      await deleteHireRequestRequest(selectedHireRequest.id);
+      setHireRequests((current) =>
+        current.filter((hireRequest) => hireRequest.id !== selectedHireRequest.id),
+      );
+      setSelectedHireRequest(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal menghapus hire request.");
+    }
   }
 
   return (
@@ -203,7 +221,19 @@ export default function HireRequestsPage() {
         )}
       </div>
 
-      <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm xl:block">
+      {error && (
+        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="card text-sm font-semibold text-slate-500">
+          Loading hire requests...
+        </div>
+      )}
+
+      {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm xl:block">
         <table className="w-full min-w-[2800px] border-collapse text-left text-sm">
           <thead className="bg-slate-950 text-white">
             <tr>
@@ -282,7 +312,7 @@ export default function HireRequestsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       <div className="space-y-3 xl:hidden">
         {paginatedHireRequests.map((hireRequest) => (

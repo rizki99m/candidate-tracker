@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { RoleForm } from "@/components/RoleForm";
-import { Role, loadRoles, saveRoles } from "@/lib/recruitment";
+import {
+  LookupItem,
+  Role,
+  fetchLookups,
+  fetchRole,
+  updateRole,
+} from "@/lib/recruitment";
 
 export default function EditRolePage() {
   const params = useParams();
@@ -11,27 +17,17 @@ export default function EditRolePage() {
   const id = String(params.id);
 
   const [role, setRole] = useState<Role | null>(null);
+  const [roleStatuses, setRoleStatuses] = useState<LookupItem[]>([]);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      const found = loadRoles().find((item) => item.id === id) || null;
+    Promise.all([fetchLookups(), fetchRole(id)]).then(([lookups, found]) => {
+      setRoleStatuses(lookups.roleStatuses);
       setRole(found);
     });
   }, [id]);
 
-  function handleSubmit(data: Omit<Role, "id" | "createdAt">) {
-    const roles = loadRoles();
-
-    const updated = roles.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            ...data,
-          }
-        : item
-    );
-
-    saveRoles(updated);
+  async function handleSubmit(data: Omit<Role, "id" | "createdAt" | "updatedAt">) {
+    await updateRole(id, data);
     router.push("/roles");
   }
 
@@ -46,6 +42,7 @@ export default function EditRolePage() {
 
   return (
     <RoleForm
+      roleStatusesLookup={roleStatuses}
       initialRole={role}
       submitLabel="Update Role"
       onSubmit={handleSubmit}
