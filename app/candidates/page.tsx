@@ -252,11 +252,26 @@ export default function CandidatesPage() {
       }
 
       const created: Candidate[] = [];
-      for (const candidate of imported) {
-        created.push(await createCandidate(candidate));
+      const failed: string[] = [];
+
+      for (const [index, candidate] of imported.entries()) {
+        const rowNumber = index + 2;
+        try {
+          created.push(await createCandidate(candidate));
+        } catch (err) {
+          failed.push(
+            `Row ${rowNumber}: ${
+              err instanceof Error ? err.message : "Gagal import kandidat."
+            }`,
+          );
+        }
       }
-      setCandidates((current) => [...created, ...current]);
-      alert(`${created.length} kandidat berhasil diimport.`);
+
+      if (created.length > 0) {
+        setCandidates((current) => [...created, ...current]);
+      }
+
+      alert(buildImportSummary(created.length, failed));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Gagal import kandidat.");
     } finally {
@@ -792,6 +807,28 @@ function buildImportedCandidate(
     hrInterviewDate: getImportValue(row, ["hr_interview_date"]),
     userInterviewDate: getImportValue(row, ["user_interview_date"]),
   };
+}
+
+function buildImportSummary(successCount: number, failed: string[]) {
+  if (failed.length === 0) {
+    return `${successCount} kandidat berhasil diimport.`;
+  }
+
+  const visibleErrors = failed.slice(0, 15).join("\n");
+  const remaining =
+    failed.length > 15 ? `\n...dan ${failed.length - 15} error lainnya.` : "";
+
+  return [
+    `Import selesai.`,
+    `Berhasil: ${successCount}`,
+    `Gagal: ${failed.length}`,
+    "",
+    "Detail gagal:",
+    visibleErrors,
+    remaining,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function getImportValue(row: Record<string, string>, keys: string[]) {
