@@ -6,7 +6,6 @@ export async function GET() {
   const [
     roleStatuses,
     candidateStatuses,
-    candidateProgresses,
     hireRequestStatuses,
     roles,
   ] = await Promise.all([
@@ -14,12 +13,6 @@ export async function GET() {
     sql`
       SELECT id, name, color_hex, is_terminal, sort_order
       FROM candidate_statuses
-      ORDER BY sort_order, name
-    `,
-    sql`
-      SELECT id, name, sort_order, is_active
-      FROM candidate_progresses
-      WHERE is_active = TRUE
       ORDER BY sort_order, name
     `,
     sql`
@@ -41,12 +34,6 @@ export async function GET() {
       name: asString(row.name),
       colorHex: asString(row.color_hex),
       isTerminal: Boolean(row.is_terminal),
-      sortOrder: Number(row.sort_order || 0),
-    })),
-    candidateProgresses: candidateProgresses.map((row) => ({
-      id: asString(row.id),
-      name: asString(row.name),
-      isActive: Boolean(row.is_active),
       sortOrder: Number(row.sort_order || 0),
     })),
     hireRequestStatuses: hireRequestStatuses.map((row) => ({

@@ -5,6 +5,7 @@ import {
   nullableString,
   requiredString,
 } from "@/lib/api-data";
+import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 async function findRole(id: number) {
@@ -43,6 +44,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const id = await getId(params);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
@@ -74,6 +80,11 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const id = await getId(params);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 

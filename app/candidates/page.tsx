@@ -10,15 +10,25 @@ import {
 } from "@/components/PaginationControls";
 import {
   Candidate,
+  CandidateStatusLookup,
   Role,
   candidateStatuses,
+  createCandidate,
   deleteCandidate as deleteCandidateRequest,
   filterCandidates,
   fetchCandidates,
+  fetchLookups,
   fetchRoles,
   getRoleName,
   statusClass,
 } from "@/lib/recruitment";
+import {
+  SessionUser,
+  canAddCandidate,
+  canImportCandidates,
+  canManageData,
+  canSeeSalary,
+} from "@/lib/permissions";
 
 type SearchColumn = "role" | keyof Omit<Candidate, "id">;
 
@@ -29,7 +39,9 @@ const candidateColumns: { key: SearchColumn; label: string }[] = [
   { key: "role", label: "Role" },
   { key: "position", label: "Posisi yang Dilamar" },
   { key: "status", label: "Status" },
-  { key: "progress", label: "Progress" },
+  { key: "gpa", label: "IPK / GPA" },
+  { key: "currentSalary", label: "Current Salary" },
+  { key: "expectedSalary", label: "Expected Salary" },
   { key: "cvLink", label: "CV" },
 ];
 
@@ -39,18 +51,15 @@ const candidateDetailColumns: { key: SearchColumn; label: string }[] = [
   { key: "level", label: "Level" },
   { key: "source", label: "Sumber" },
   { key: "poolDate", label: "Tanggal Masuk Pool" },
-  { key: "workExperienceYears", label: "Pengalaman Kerja (Tahun)" },
   { key: "education", label: "Pendidikan" },
   { key: "university", label: "Universitas" },
   { key: "major", label: "Jurusan" },
   { key: "location", label: "Lokasi" },
-  { key: "rating", label: "Rating (1-5)" },
   { key: "linkedInProfile", label: "LinkedIn Profile" },
   { key: "summaryInterviewHr", label: "Summary Interview HR" },
   { key: "portfolioLink", label: "Portfolio" },
   { key: "psychologicalTest", label: "Psychological Test" },
   { key: "feedbackFromUser", label: "Feedback From User" },
-  { key: "interviewDate", label: "Interview Date" },
   { key: "hrInterviewDate", label: "HR Interview Date" },
   { key: "userInterviewDate", label: "User Interview Date" },
   { key: "createdAt", label: "Created At" },
@@ -63,6 +72,10 @@ const emptySearchFilters = Object.fromEntries(
 export default function CandidatesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidateStatusesLookup, setCandidateStatusesLookup] = useState<
+    CandidateStatusLookup[]
+  >([]);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(
     null,
   );
@@ -78,6 +91,7 @@ export default function CandidatesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -85,12 +99,14 @@ export default function CandidatesPage() {
       setLoading(true);
       setError("");
       try {
-        const [rolesData, candidatesData] = await Promise.all([
+        const [rolesData, candidatesData, lookups] = await Promise.all([
           fetchRoles(),
           fetchCandidates(),
+          fetchLookups(),
         ]);
         setRoles(rolesData);
         setCandidates(candidatesData);
+        setCandidateStatusesLookup(lookups.candidateStatuses);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Gagal memuat data.");
       } finally {
@@ -100,6 +116,42 @@ export default function CandidatesPage() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => setUser(payload?.user || null))
+      .catch(() => setUser(null));
+  }, []);
+
+  const canManage = canManageData(user?.role);
+  const showSalary = canSeeSalary(user?.role);
+  const tableColumns = useMemo(
+    () =>
+      showSalary
+        ? candidateColumns
+        : candidateColumns.filter(
+            (column) =>
+              column.key !== "currentSalary" &&
+              column.key !== "expectedSalary",
+          ),
+    [showSalary],
+  );
+  const detailColumns = useMemo(
+    () =>
+      showSalary
+        ? candidateDetailColumns
+        : candidateDetailColumns.filter(
+            (column) =>
+              column.key !== "currentSalary" &&
+              column.key !== "expectedSalary",
+          ),
+    [showSalary],
+  );
+  const searchableColumns = useMemo(
+    () => (showSalary ? candidateColumns : tableColumns),
+    [showSalary, tableColumns],
+  );
 
   const filteredCandidates = useMemo(() => {
     return filterCandidates(candidates, {
@@ -112,7 +164,7 @@ export default function CandidatesPage() {
       const raw = searchQuery.trim().toLowerCase();
       const matchesGlobal =
         !raw ||
-        candidateColumns.some((column) =>
+        searchableColumns.some((column) =>
           candidateSearchValue(candidate, roles, column.key)
             .toLowerCase()
             .includes(raw),
@@ -130,7 +182,15 @@ export default function CandidatesPage() {
 
       return matchesGlobal && matchesAdvanced;
     });
-  }, [candidates, roles, roleFilter, statusFilter, searchFilters, searchQuery]);
+  }, [
+    candidates,
+    roles,
+    roleFilter,
+    searchableColumns,
+    statusFilter,
+    searchFilters,
+    searchQuery,
+  ]);
 
   const currentPage = Math.min(
     page,
@@ -174,13 +234,47 @@ export default function CandidatesPage() {
     exportCandidatesToExcel(filteredCandidates, roles);
   }
 
+  async function importCandidates(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const imported = parseCandidateCsv(text).map((row) =>
+        buildImportedCandidate(row, roles, candidateStatusesLookup),
+      );
+
+      if (imported.length === 0) {
+        alert("File import tidak punya data kandidat.");
+        return;
+      }
+
+      const created: Candidate[] = [];
+      for (const candidate of imported) {
+        created.push(await createCandidate(candidate));
+      }
+      setCandidates((current) => [...created, ...current]);
+      alert(`${created.length} kandidat berhasil diimport.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal import kandidat.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="card">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <Link href="/candidates/new" className="primary-button">
-            Add Candidate
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {canAddCandidate(user?.role) && (
+              <Link href="/candidates/new" className="primary-button">
+                Add Candidate
+              </Link>
+            )}
+          </div>
 
           <div className="w-full max-w-md">
             <label className="block">
@@ -207,7 +301,7 @@ export default function CandidatesPage() {
         {searchOpen && (
           <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {candidateColumns.map((column) => (
+              {tableColumns.map((column) => (
                 <Field key={column.key} label={column.label}>
                   <input
                     value={searchFilters[column.key]}
@@ -281,7 +375,7 @@ export default function CandidatesPage() {
           <thead className="bg-slate-950 text-white">
             <tr>
               <th className="px-4 py-3">No</th>
-              {candidateColumns.map((column) => (
+              {tableColumns.map((column) => (
                 <th key={column.key} className="px-4 py-3">
                   {column.label}
                 </th>
@@ -295,7 +389,7 @@ export default function CandidatesPage() {
                 <td className="px-4 py-4 text-xs text-slate-500">
                   {(currentPage - 1) * pageSize + index + 1}
                 </td>
-                {candidateColumns.map((column) => (
+                {tableColumns.map((column) => (
                   <td
                     key={column.key}
                     className="max-w-xs px-4 py-4 text-slate-600"
@@ -311,18 +405,22 @@ export default function CandidatesPage() {
                     >
                       Detail
                     </button>
-                    <Link
-                      href={`/candidates/${candidate.id}/edit`}
-                      className="secondary-button px-3 py-2 text-xs"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => setSelectedCandidate(candidate)}
-                      className="danger-button px-3 py-2 text-xs"
-                    >
-                      Delete
-                    </button>
+                    {canManage && (
+                      <>
+                        <Link
+                          href={`/candidates/${candidate.id}/edit`}
+                          className="secondary-button px-3 py-2 text-xs"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => setSelectedCandidate(candidate)}
+                          className="danger-button px-3 py-2 text-xs"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -331,7 +429,7 @@ export default function CandidatesPage() {
             {filteredCandidates.length === 0 && (
               <tr>
                 <td
-                  colSpan={candidateColumns.length + 2}
+                  colSpan={tableColumns.length + 2}
                   className="px-4 py-8 text-center text-slate-500"
                 >
                   Belum ada kandidat.
@@ -360,11 +458,6 @@ export default function CandidatesPage() {
               >
                 {candidate.status}
               </span>
-              {candidate.progress && (
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-                  {candidate.progress}
-                </span>
-              )}
             </div>
 
             <div className="mt-4 space-y-2 text-sm text-slate-600">
@@ -375,25 +468,33 @@ export default function CandidatesPage() {
               </p>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div
+              className={`mt-4 grid gap-2 ${
+                canManage ? "grid-cols-3" : "grid-cols-1"
+              }`}
+            >
               <button
                 onClick={() => setDetailCandidate(candidate)}
                 className="secondary-button text-sm"
               >
                 Detail
               </button>
-              <Link
-                href={`/candidates/${candidate.id}/edit`}
-                className="secondary-button text-sm"
-              >
-                Edit
-              </Link>
-              <button
-                onClick={() => setSelectedCandidate(candidate)}
-                className="danger-button text-sm"
-              >
-                Delete
-              </button>
+              {canManage && (
+                <>
+                  <Link
+                    href={`/candidates/${candidate.id}/edit`}
+                    className="secondary-button text-sm"
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    onClick={() => setSelectedCandidate(candidate)}
+                    className="danger-button text-sm"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -407,14 +508,28 @@ export default function CandidatesPage() {
         onPageSizeChange={setPageSize}
       />
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={exportCandidates}
-          className="secondary-button"
-        >
-          Export to Excel
-        </button>
+      <div className="flex flex-wrap justify-end gap-2">
+        {canImportCandidates(user?.role) && (
+          <label className="secondary-button cursor-pointer">
+            {importing ? "Importing..." : "Import CSV"}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={importCandidates}
+              disabled={importing}
+              className="sr-only"
+            />
+          </label>
+        )}
+        {canManage && (
+          <button
+            type="button"
+            onClick={exportCandidates}
+            className="secondary-button"
+          >
+            Export to Excel
+          </button>
+        )}
       </div>
 
       <ConfirmDialog
@@ -429,6 +544,7 @@ export default function CandidatesPage() {
       <CandidateDetailDialog
         candidate={detailCandidate}
         roles={roles}
+        columns={detailColumns}
         onClose={() => setDetailCandidate(null)}
       />
     </section>
@@ -438,17 +554,19 @@ export default function CandidatesPage() {
 function CandidateDetailDialog({
   candidate,
   roles,
+  columns,
   onClose,
 }: {
   candidate: Candidate | null;
   roles: Role[];
+  columns: { key: SearchColumn; label: string }[];
   onClose: () => void;
 }) {
   if (!candidate) return null;
 
   const rows = [
     { label: "ID", value: candidate.id, key: null },
-    ...candidateDetailColumns.map((column) => ({
+    ...columns.map((column) => ({
       label: column.label,
       value: candidateSearchValue(candidate, roles, column.key),
       key: column.key,
@@ -551,6 +669,151 @@ function exportCandidatesToExcel(candidates: Candidate[], roles: Role[]) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function parseCandidateCsv(text: string) {
+  const rows = parseCsvRows(text.trim());
+  if (rows.length < 2) return [];
+
+  const headers = rows[0].map((header) => normalizeHeader(header));
+  return rows.slice(1).flatMap((row) => {
+    if (row.every((cell) => !cell.trim())) return [];
+    return [
+      Object.fromEntries(
+        headers.map((header, index) => [header, row[index]?.trim() || ""]),
+      ),
+    ];
+  });
+}
+
+function parseCsvRows(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell);
+  rows.push(row);
+  return rows;
+}
+
+function buildImportedCandidate(
+  row: Record<string, string>,
+  roles: Role[],
+  statuses: CandidateStatusLookup[],
+): Omit<
+  Candidate,
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "roleName"
+  | "statusName"
+  | "statusColorHex"
+> {
+  const roleText = getImportValue(row, ["role_applied", "role", "roleid"]);
+  const role = roles.find(
+    (item) =>
+      item.id === roleText ||
+      item.name.toLowerCase() === roleText.toLowerCase(),
+  );
+  const statusText =
+    getImportValue(row, ["status", "candidate_status"]) ||
+    statuses[0]?.name ||
+    "HR Interview";
+  const status = statuses.find(
+    (item) =>
+      item.id === statusText ||
+      item.name.toLowerCase() === statusText.toLowerCase(),
+  );
+
+  return {
+    roleId: role?.id || "",
+    position: getImportValue(row, ["position", "posisi"]) || role?.name || "",
+    level: getImportValue(row, ["level"]) || role?.level || "",
+    nameOfCandidate: getImportValue(row, [
+      "name",
+      "nama",
+      "nama_lengkap",
+      "name_of_candidate",
+    ]),
+    email: getImportValue(row, ["email"]),
+    phoneNumber: getImportValue(row, ["no_hp", "phone", "phone_number"]),
+    department:
+      getImportValue(row, ["department", "departement", "division"]) ||
+      role?.department ||
+      "",
+    source: getImportValue(row, ["source", "sumber"]),
+    poolDate: getImportValue(row, ["pool_date", "tanggal_masuk"]) || todayIso(),
+    education: getImportValue(row, ["education", "pendidikan"]),
+    university: getImportValue(row, ["university", "universitas"]),
+    major: getImportValue(row, ["major", "jurusan"]),
+    gpa: getImportValue(row, ["gpa", "ipk"]),
+    location: getImportValue(row, ["location", "lokasi"]),
+    currentSalary: normalizeRupiah(
+      getImportValue(row, ["current_salary", "current"]),
+    ),
+    expectedSalary: normalizeRupiah(
+      getImportValue(row, ["expected_salary", "expected", "excpected_salary"]),
+    ),
+    linkedInProfile: getImportValue(row, ["linkedin", "linked_in_profile"]),
+    summaryInterviewHr: getImportValue(row, ["summary_hr", "summary_interview_hr"]),
+    cvLink: getImportValue(row, ["cv", "resume", "cv_link"]),
+    portfolioLink: getImportValue(row, ["portfolio", "portfolio_link"]),
+    psychologicalTest: getImportValue(row, [
+      "psychological_test",
+      "psikotes",
+    ]),
+    feedbackFromUser: getImportValue(row, ["summary_user", "feedback_from_user"]),
+    statusId: status?.id || "",
+    status: status?.name || statusText,
+    hrInterviewDate: getImportValue(row, ["hr_interview_date"]),
+    userInterviewDate: getImportValue(row, ["user_interview_date"]),
+  };
+}
+
+function getImportValue(row: Record<string, string>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[normalizeHeader(key)];
+    if (value) return value;
+  }
+  return "";
+}
+
+function normalizeHeader(value: string) {
+  return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "_").replaceAll(/^_|_$/g, "");
+}
+
+function normalizeRupiah(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return value.trim();
+  return `Rp ${Number(digits).toLocaleString("id-ID")}`;
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function escapeHtml(value: string) {

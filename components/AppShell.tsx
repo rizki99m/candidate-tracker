@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { canAccessSection } from "@/lib/permissions";
 
 const navItems = [
   { label: "Dashboard", href: "/" },
@@ -63,6 +64,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setMobileMenuOpen(false);
     }
   }
+
+  const visibleNavItems = navItems.filter((item) =>
+    canAccessSection(user?.role, item.href),
+  );
 
   return (
     <main
@@ -131,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <nav className="mt-8 space-y-2">
-              {navItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -204,7 +209,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <nav className="mt-10 space-y-2">
-              {navItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

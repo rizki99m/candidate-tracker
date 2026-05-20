@@ -6,10 +6,9 @@ export async function GET() {
   let totalsRows;
   let byStatus;
   let byRole;
-  let byProgress;
 
   try {
-    [totalsRows, byStatus, byRole, byProgress] = await Promise.all([
+    [totalsRows, byStatus, byRole] = await Promise.all([
       sql`SELECT * FROM v_dashboard_totals`,
       sql`
         SELECT *
@@ -21,16 +20,11 @@ export async function GET() {
         FROM v_dashboard_role_summary
         ORDER BY role_name
       `,
-      sql`
-        SELECT *
-        FROM v_dashboard_progress_summary
-        ORDER BY sort_order, progress_name
-      `,
     ]);
   } catch (error) {
     if (!isMissingRelationError(error)) throw error;
 
-    [totalsRows, byStatus, byRole, byProgress] = await Promise.all([
+    [totalsRows, byStatus, byRole] = await Promise.all([
       sql`
         SELECT
           COUNT(*)::int AS total_candidates,
@@ -66,17 +60,6 @@ export async function GET() {
         GROUP BY r.id, r.name
         ORDER BY role_name
       `,
-      sql`
-        SELECT
-          cp.id AS progress_id,
-          COALESCE(cp.name, 'No Progress') AS progress_name,
-          COALESCE(cp.sort_order, 9999) AS sort_order,
-          COUNT(c.id)::int AS candidate_count
-        FROM candidates c
-        LEFT JOIN candidate_progresses cp ON cp.id = c.progress_id
-        GROUP BY cp.id, cp.name, cp.sort_order
-        ORDER BY sort_order, progress_name
-      `,
     ]);
   }
 
@@ -100,12 +83,6 @@ export async function GET() {
     byRole: byRole.map((row) => ({
       roleId: asString(row.role_id),
       roleName: asString(row.role_name) || "Talent Pool",
-      candidateCount: Number(row.candidate_count || 0),
-    })),
-    byProgress: byProgress.map((row) => ({
-      progressId: asString(row.progress_id),
-      progressName: asString(row.progress_name) || "No Progress",
-      sortOrder: Number(row.sort_order || 0),
       candidateCount: Number(row.candidate_count || 0),
     })),
   });

@@ -3,10 +3,7 @@
 import { useState } from "react";
 import {
   Candidate,
-  CandidateProgress,
   CandidateStatus,
-  candidateProgresses,
-  CandidateProgressLookup,
   CandidateStatusLookup,
   Role,
   candidateStatuses,
@@ -24,35 +21,32 @@ const sourceOptions = [
   "Others",
 ];
 
+type CandidateFormData = Omit<
+  Candidate,
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "roleName"
+  | "statusName"
+  | "statusColorHex"
+>;
+
 export function CandidateForm({
   roles,
   candidateStatusesLookup = [],
-  candidateProgressesLookup = [],
   initialCandidate,
   submitLabel,
   onSubmit,
 }: {
   roles: Role[];
   candidateStatusesLookup?: CandidateStatusLookup[];
-  candidateProgressesLookup?: CandidateProgressLookup[];
   initialCandidate?: Partial<Candidate>;
   submitLabel: string;
-  onSubmit: (
-    data: Omit<
-      Candidate,
-      | "id"
-      | "createdAt"
-      | "updatedAt"
-      | "roleName"
-      | "statusName"
-      | "statusColorHex"
-      | "progressName"
-    >
-  ) => void;
+  onSubmit: (data: CandidateFormData) => void;
 }) {
   const defaultStatusId =
     initialCandidate?.statusId || candidateStatusesLookup[0]?.id || "";
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CandidateFormData>({
     roleId: initialCandidate?.roleId || "",
     position: initialCandidate?.position || "",
     level: initialCandidate?.level || "",
@@ -62,12 +56,13 @@ export function CandidateForm({
     department: initialCandidate?.department || "",
     source: initialCandidate?.source || "",
     poolDate: initialCandidate?.poolDate || todayString(),
-    workExperienceYears: initialCandidate?.workExperienceYears || "",
     education: initialCandidate?.education || "",
     university: initialCandidate?.university || "",
     major: initialCandidate?.major || "",
+    gpa: initialCandidate?.gpa || "",
     location: initialCandidate?.location || "",
-    rating: initialCandidate?.rating || "",
+    currentSalary: formatRupiah(initialCandidate?.currentSalary || ""),
+    expectedSalary: formatRupiah(initialCandidate?.expectedSalary || ""),
     linkedInProfile: initialCandidate?.linkedInProfile || "",
     summaryInterviewHr: initialCandidate?.summaryInterviewHr || "",
     cvLink: initialCandidate?.cvLink || "",
@@ -75,13 +70,19 @@ export function CandidateForm({
     psychologicalTest: initialCandidate?.psychologicalTest || "",
     feedbackFromUser: initialCandidate?.feedbackFromUser || "",
     statusId: defaultStatusId,
-    progressId: initialCandidate?.progressId || "",
-    status: (initialCandidate?.status || candidateStatusesLookup[0]?.name || "HR Interview") as CandidateStatus,
-    progress: (initialCandidate?.progress || "") as CandidateProgress,
-    interviewDate: initialCandidate?.interviewDate || todayString(),
+    status: (initialCandidate?.status ||
+      candidateStatusesLookup[0]?.name ||
+      "HR Interview") as CandidateStatus,
     hrInterviewDate: initialCandidate?.hrInterviewDate || "",
     userInterviewDate: initialCandidate?.userInterviewDate || "",
   });
+
+  function updateField<K extends keyof CandidateFormData>(
+    key: K,
+    value: CandidateFormData[K],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
   function handleRoleChange(roleId: string) {
     const selectedRole = roles.find((role) => role.id === roleId);
@@ -93,6 +94,13 @@ export function CandidateForm({
       level: selectedRole?.level || current.level,
       department: selectedRole?.department || current.department,
     }));
+  }
+
+  function handleSalaryChange(
+    key: "currentSalary" | "expectedSalary",
+    value: string,
+  ) {
+    updateField(key, formatRupiah(value));
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -109,6 +117,7 @@ export function CandidateForm({
     }
 
     onSubmit({
+      ...form,
       roleId: form.roleId,
       position: form.position.trim(),
       level: form.level.trim(),
@@ -118,12 +127,13 @@ export function CandidateForm({
       department: form.department.trim(),
       source: form.source.trim(),
       poolDate: form.poolDate,
-      workExperienceYears: form.workExperienceYears.trim(),
       education: form.education.trim(),
       university: form.university.trim(),
       major: form.major.trim(),
+      gpa: form.gpa.trim(),
       location: form.location.trim(),
-      rating: form.rating.trim(),
+      currentSalary: form.currentSalary.trim(),
+      expectedSalary: form.expectedSalary.trim(),
       linkedInProfile: form.linkedInProfile.trim(),
       summaryInterviewHr: form.summaryInterviewHr.trim(),
       cvLink: form.cvLink.trim(),
@@ -131,118 +141,258 @@ export function CandidateForm({
       psychologicalTest: form.psychologicalTest.trim(),
       feedbackFromUser: form.feedbackFromUser.trim(),
       statusId: form.statusId,
-      progressId: form.progressId,
       status: form.status,
-      progress: form.progress,
-      interviewDate: form.interviewDate,
       hrInterviewDate: form.hrInterviewDate,
       userInterviewDate: form.userInterviewDate,
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card space-y-6">
+    <form onSubmit={handleSubmit} className="card space-y-5">
       <div>
         <h3 className="text-2xl font-black text-slate-950">{submitLabel}</h3>
         <p className="mt-2 text-sm text-slate-500">
-          Field kandidat mengikuti kerangka Excel recruitment yang dipakai.
+          Field kandidat sudah disesuaikan dengan struktur database terbaru.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Role">
-          <select
-            value={form.roleId}
-            onChange={(event) => handleRoleChange(event.target.value)}
-            className="input"
-          >
-            <option value="">No Role / Talent Pool</option>
-            {roles
-              .filter((role) => role.status === "Active")
-              .map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
+      <FormSection title="Role" defaultOpen>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Field label="Role Applied">
+            <select
+              value={form.roleId}
+              onChange={(event) => handleRoleChange(event.target.value)}
+              className="input"
+            >
+              <option value="">No Role / Talent Pool</option>
+              {roles
+                .filter((role) => role.status === "Active")
+                .map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+
+          <Field label="Position">
+            <input
+              value={form.position}
+              onChange={(event) => updateField("position", event.target.value)}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Level">
+            <input
+              value={form.level}
+              onChange={(event) => updateField("level", event.target.value)}
+              placeholder="Senior / Staff / Intern"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Department">
+            <input
+              value={form.department}
+              onChange={(event) => updateField("department", event.target.value)}
+              placeholder="Department / Division"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Source">
+            <select
+              value={form.source}
+              onChange={(event) => updateField("source", event.target.value)}
+              className="input"
+            >
+              <option value="">Select source</option>
+              {sourceOptions.map((source) => (
+                <option key={source} value={source}>
+                  {source}
                 </option>
               ))}
-          </select>
+            </select>
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection title="Biodata" defaultOpen>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Name">
+            <input
+              value={form.nameOfCandidate}
+              onChange={(event) =>
+                updateField("nameOfCandidate", event.target.value)
+              }
+              placeholder="Nama kandidat"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Email">
+            <input
+              type="email"
+              value={form.email}
+              onChange={(event) => updateField("email", event.target.value)}
+              placeholder="email@domain.com"
+              className="input"
+            />
+          </Field>
+
+          <Field label="No. HP">
+            <input
+              value={form.phoneNumber}
+              onChange={(event) =>
+                updateField("phoneNumber", event.target.value)
+              }
+              placeholder="0812719979830"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Lokasi">
+            <input
+              value={form.location}
+              onChange={(event) => updateField("location", event.target.value)}
+              className="input"
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection title="Education">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="Pendidikan">
+            <select
+              value={form.education}
+              onChange={(event) => updateField("education", event.target.value)}
+              className="input"
+            >
+              <option value="">Select education</option>
+              {educationOptions.map((education) => (
+                <option key={education} value={education}>
+                  {education}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="University">
+            <input
+              value={form.university}
+              onChange={(event) => updateField("university", event.target.value)}
+              className="input"
+            />
+          </Field>
+
+          <Field label="Major">
+            <input
+              value={form.major}
+              onChange={(event) => updateField("major", event.target.value)}
+              className="input"
+            />
+          </Field>
+
+          <Field label="IPK / GPA">
+            <input
+              value={form.gpa}
+              onChange={(event) => updateField("gpa", event.target.value)}
+              placeholder="3.75"
+              className="input"
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection title="Resume">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="Resume / CV">
+            <input
+              value={form.cvLink}
+              onChange={(event) => updateField("cvLink", event.target.value)}
+              placeholder="Google Drive / file name / link"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Portofolio">
+            <input
+              value={form.portfolioLink}
+              onChange={(event) =>
+                updateField("portfolioLink", event.target.value)
+              }
+              placeholder="Behance / website / drive link"
+              className="input"
+            />
+          </Field>
+
+          <Field label="LinkedIn">
+            <input
+              value={form.linkedInProfile}
+              onChange={(event) =>
+                updateField("linkedInProfile", event.target.value)
+              }
+              placeholder="Link LinkedIn / text"
+              className="input"
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Field label="Current Salary">
+          <input
+            inputMode="numeric"
+            value={form.currentSalary}
+            onChange={(event) =>
+              handleSalaryChange("currentSalary", event.target.value)
+            }
+            placeholder="Rp 8.000.000"
+            className="input"
+          />
         </Field>
 
-        <Field label="Position">
+        <Field label="Expected Salary">
           <input
-            value={form.position}
+            inputMode="numeric"
+            value={form.expectedSalary}
             onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                position: event.target.value,
-              }))
+              handleSalaryChange("expectedSalary", event.target.value)
+            }
+            placeholder="Rp 10.000.000"
+            className="input"
+          />
+        </Field>
+
+        <Field label="Pool Date">
+          <input
+            type="date"
+            value={form.poolDate}
+            onChange={(event) => updateField("poolDate", event.target.value)}
+            className="input"
+          />
+        </Field>
+
+        <Field label="HR Interview Date">
+          <input
+            type="date"
+            value={form.hrInterviewDate}
+            onChange={(event) =>
+              updateField("hrInterviewDate", event.target.value)
             }
             className="input"
           />
         </Field>
 
-        <Field label="Level">
+        <Field label="User Interview Date">
           <input
-            value={form.level}
+            type="date"
+            value={form.userInterviewDate}
             onChange={(event) =>
-              setForm((current) => ({ ...current, level: event.target.value }))
+              updateField("userInterviewDate", event.target.value)
             }
-            placeholder="Senior / Staff / Intern"
-            className="input"
-          />
-        </Field>
-
-        <Field label="Department">
-          <input
-            value={form.department}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                department: event.target.value,
-              }))
-            }
-            placeholder="Department / Division"
-            className="input"
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Name of Candidate">
-          <input
-            value={form.nameOfCandidate}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                nameOfCandidate: event.target.value,
-              }))
-            }
-            placeholder="Nama kandidat"
-            className="input"
-          />
-        </Field>
-
-        <Field label="Email">
-          <input
-            type="email"
-            value={form.email}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, email: event.target.value }))
-            }
-            placeholder="email@domain.com"
-            className="input"
-          />
-        </Field>
-
-        <Field label="No. HP">
-          <input
-            value={form.phoneNumber}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                phoneNumber: event.target.value,
-              }))
-            }
-            placeholder="0812719979830"
             className="input"
           />
         </Field>
@@ -272,259 +422,13 @@ export function CandidateForm({
             ))}
           </select>
         </Field>
-
-        <Field label="Progress">
-          <select
-            value={form.progressId}
-            onChange={(event) => {
-              const selected = candidateProgressesLookup.find(
-                (item) => item.id === event.target.value,
-              );
-              setForm((current) => ({
-                ...current,
-                progressId: event.target.value,
-                progress: (selected?.name || "") as CandidateProgress,
-              }));
-            }}
-            className="input"
-          >
-            <option value="">No Progress</option>
-            {(candidateProgressesLookup.length
-              ? candidateProgressesLookup
-              : candidateProgresses
-                  .filter(Boolean)
-                  .map((progress) => ({ id: progress, name: progress }))
-            ).map((progress) => (
-              <option key={progress.id} value={progress.id}>
-                {progress.name}
-              </option>
-            ))}
-          </select>
-        </Field>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Source">
-          <select
-            value={form.source}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, source: event.target.value }))
-            }
-            className="input"
-          >
-            <option value="">Select source</option>
-            {sourceOptions.map((source) => (
-              <option key={source} value={source}>
-                {source}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Pool Date">
-          <input
-            type="date"
-            value={form.poolDate}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                poolDate: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-
-        <Field label="Rating (1-5)">
-          <input
-            value={form.rating}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, rating: event.target.value }))
-            }
-            placeholder="1-5"
-            className="input"
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Pengalaman Kerja (Tahun)">
-          <input
-            value={form.workExperienceYears}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                workExperienceYears: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-
-        <Field label="Pendidikan">
-          <select
-            value={form.education}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                education: event.target.value,
-              }))
-            }
-            className="input"
-          >
-            <option value="">Select education</option>
-            {educationOptions.map((education) => (
-              <option key={education} value={education}>
-                {education}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Universitas">
-          <input
-            value={form.university}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                university: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-
-        <Field label="Jurusan">
-          <input
-            value={form.major}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, major: event.target.value }))
-            }
-            className="input"
-          />
-        </Field>
-
-        <Field label="Lokasi">
-          <input
-            value={form.location}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                location: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Interview Date">
-          <input
-            type="date"
-            value={form.interviewDate}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                interviewDate: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-
-        <Field label="HR Interview Date">
-          <input
-            type="date"
-            value={form.hrInterviewDate}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                hrInterviewDate: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-
-        <Field label="User Interview Date">
-          <input
-            type="date"
-            value={form.userInterviewDate}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                userInterviewDate: event.target.value,
-              }))
-            }
-            className="input"
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="LinkedIn Profile">
-          <input
-            value={form.linkedInProfile}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                linkedInProfile: event.target.value,
-              }))
-            }
-            placeholder="Link LinkedIn / text"
-            className="input"
-          />
-        </Field>
-
-        <Field label="CV Link">
-          <input
-            value={form.cvLink}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, cvLink: event.target.value }))
-            }
-            placeholder="Google Drive / file name / link"
-            className="input"
-          />
-        </Field>
-
-        <Field label="Portofolio Link">
-          <input
-            value={form.portfolioLink}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                portfolioLink: event.target.value,
-              }))
-            }
-            placeholder="Behance / website / drive link"
-            className="input"
-          />
-        </Field>
-
-        <Field label="Psychological Test">
-          <input
-            value={form.psychologicalTest}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                psychologicalTest: event.target.value,
-              }))
-            }
-            placeholder="Link / file name"
-            className="input"
-          />
-        </Field>
-      </div>
-
-      <Field label="Summary Interview HR">
+      <Field label="Summary HR">
         <textarea
           value={form.summaryInterviewHr}
           onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              summaryInterviewHr: event.target.value,
-            }))
+            updateField("summaryInterviewHr", event.target.value)
           }
           rows={5}
           placeholder="+ Kelebihan kandidat&#10;- Catatan minus&#10;Kesimpulan HR..."
@@ -532,17 +436,25 @@ export function CandidateForm({
         />
       </Field>
 
-      <Field label="Feedback from User">
+      <Field label="Summary User">
         <textarea
           value={form.feedbackFromUser}
           onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              feedbackFromUser: event.target.value,
-            }))
+            updateField("feedbackFromUser", event.target.value)
           }
           rows={4}
           placeholder="Feedback dari user/interviewer..."
+          className="input"
+        />
+      </Field>
+
+      <Field label="Psychological Test">
+        <input
+          value={form.psychologicalTest}
+          onChange={(event) =>
+            updateField("psychologicalTest", event.target.value)
+          }
+          placeholder="Link / file name"
           className="input"
         />
       </Field>
@@ -551,6 +463,28 @@ export function CandidateForm({
         {submitLabel}
       </button>
     </form>
+  );
+}
+
+function FormSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="rounded-2xl border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)]"
+    >
+      <summary className="cursor-pointer select-none rounded-2xl bg-slate-50 px-4 py-3 text-sm font-black text-slate-800">
+        {title}
+      </summary>
+      <div className="border-t border-slate-200 p-4">{children}</div>
+    </details>
   );
 }
 
@@ -569,4 +503,10 @@ function Field({
       {children}
     </label>
   );
+}
+
+function formatRupiah(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return `Rp ${Number(digits).toLocaleString("id-ID")}`;
 }

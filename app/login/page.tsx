@@ -8,6 +8,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -81,14 +82,25 @@ export default function LoginPage() {
             <span className="mb-2 block text-sm font-bold text-slate-700">
               Password
             </span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="password"
-              autoComplete="current-password"
-              className="input"
-            />
+            <div className="relative">
+              <input
+                type={passwordVisible ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="password"
+                autoComplete="current-password"
+                className="input pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setPasswordVisible((visible) => !visible)}
+                aria-label={passwordVisible ? "Hide password" : "Show password"}
+                title={passwordVisible ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+              >
+                {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
 
           {error && (
@@ -107,5 +119,43 @@ export default function LoginPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M10.7 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a18.3 18.3 0 0 1-2.3 3.2" />
+      <path d="M6.6 6.6C3.7 8.3 2 12 2 12s3.5 7 10 7a9.8 9.8 0 0 0 5.4-1.6" />
+      <path d="m2 2 20 20" />
+      <path d="M9.9 9.9A3 3 0 0 0 14.1 14" />
+    </svg>
   );
 }

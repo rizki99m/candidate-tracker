@@ -76,9 +76,10 @@ export function HireRequestForm({
       initialHireRequest?.preferencesCandidateResidencies || "",
     statusId: initialHireRequest?.statusId || hireRequestStatusesLookup[0]?.id || "",
     status: initialHireRequest?.status || "Assigned",
+    isUrgent: initialHireRequest?.isUrgent || false,
   });
 
-  function updateField(key: keyof HireRequestFormData, value: string) {
+  function updateField(key: keyof HireRequestFormData, value: string | boolean) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -113,6 +114,7 @@ export function HireRequestForm({
         form.preferencesCandidateResidencies.trim(),
       statusId: form.statusId,
       status: isEdit ? form.status : "Assigned",
+      isUrgent: form.isUrgent,
     });
   }
 
@@ -191,6 +193,23 @@ export function HireRequestForm({
           </Field>
         )}
       </div>
+
+      <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <input
+          type="checkbox"
+          checked={form.isUrgent}
+          onChange={(event) => updateField("isUrgent", event.target.checked)}
+          className="mt-1 h-5 w-5 rounded border-slate-300"
+        />
+        <span>
+          <span className="block text-sm font-black text-slate-800">
+            Urgent hiring request
+          </span>
+          <span className="mt-1 block text-sm text-slate-500">
+            Jika dicentang, request ini tampil paling atas dan diberi label Urgent.
+          </span>
+        </span>
+      </label>
 
       <button type="submit" className="primary-button w-full sm:w-auto">
         {submitLabel}

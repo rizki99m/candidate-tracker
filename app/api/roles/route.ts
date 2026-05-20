@@ -5,6 +5,7 @@ import {
   nullableString,
   requiredString,
 } from "@/lib/api-data";
+import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 export async function GET() {
@@ -27,6 +28,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (user?.role.toLowerCase() !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const name = requiredString(body.name);
   if (!name) {

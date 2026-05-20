@@ -3,10 +3,10 @@ import {
   mapCandidate,
   nullableDate,
   nullableInt,
-  nullableNumber,
   nullableString,
   requiredString,
 } from "@/lib/api-data";
+import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 async function getId(params: Promise<{ id: string }>) {
@@ -18,18 +18,18 @@ async function findCandidate(id: number) {
   const rows = await sql`
     SELECT
       c.id, c.role_id, r.name AS role_name, c.status_id,
-      cs.name AS status_name, cs.color_hex AS status_color_hex, c.progress_id,
-      cp.name AS progress_name, c.position, c.level, c.name_of_candidate,
+      cs.name AS status_name, cs.color_hex AS status_color_hex,
+      c.position, c.level, c.name_of_candidate,
       c.email, c.phone_number, c.department, c.source, c.pool_date,
-      c.work_experience_years, c.education, c.university, c.major, c.location,
-      c.rating, c.linked_in_profile, c.summary_interview_hr, c.cv_link,
+      c.education, c.university, c.major, c.gpa, c.location,
+      c.current_salary, c.expected_salary, c.linked_in_profile,
+      c.summary_interview_hr, c.cv_link,
       c.portfolio_link, c.psychological_test, c.feedback_from_user,
-      c.interview_date, c.hr_interview_date, c.user_interview_date,
+      c.hr_interview_date, c.user_interview_date,
       c.created_at, c.updated_at
     FROM candidates c
     LEFT JOIN roles r ON r.id = c.role_id
     LEFT JOIN candidate_statuses cs ON cs.id = c.status_id
-    LEFT JOIN candidate_progresses cp ON cp.id = c.progress_id
     WHERE c.id = ${id}
     LIMIT 1
   `;
@@ -40,21 +40,11 @@ async function findCandidate(id: number) {
 function validateCandidate(body: Record<string, unknown>) {
   const position = requiredString(body.position);
   const nameOfCandidate = requiredString(body.nameOfCandidate ?? body.name_of_candidate);
-  const rating = nullableInt(body.rating);
-  const workExperienceYears = nullableNumber(
-    body.workExperienceYears ?? body.work_experience_years,
-  );
 
   if (!position) return { error: "Position wajib diisi." };
   if (!nameOfCandidate) return { error: "Name of Candidate wajib diisi." };
-  if (rating !== null && (Number.isNaN(rating) || rating < 1 || rating > 5)) {
-    return { error: "Rating harus kosong atau angka 1 sampai 5." };
-  }
-  if (Number.isNaN(workExperienceYears)) {
-    return { error: "Pengalaman kerja harus berupa angka." };
-  }
 
-  return { position, nameOfCandidate, rating, workExperienceYears };
+  return { position, nameOfCandidate };
 }
 
 export async function GET(
@@ -69,6 +59,15 @@ export async function GET(
     return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
   }
 
+  const user = await getCurrentUser();
+  if (user?.role.toLowerCase() === "guest") {
+    return NextResponse.json({
+      ...candidate,
+      currentSalary: "",
+      expectedSalary: "",
+    });
+  }
+
   return NextResponse.json(candidate);
 }
 
@@ -76,6 +75,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const id = await getId(params);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
@@ -90,7 +94,6 @@ export async function PUT(
     SET
       role_id = ${nullableInt(body.roleId ?? body.role_id)},
       status_id = ${nullableInt(body.statusId ?? body.status_id)},
-      progress_id = ${nullableInt(body.progressId ?? body.progress_id)},
       position = ${valid.position},
       level = ${nullableString(body.level)},
       name_of_candidate = ${valid.nameOfCandidate},
@@ -99,19 +102,19 @@ export async function PUT(
       department = ${nullableString(body.department)},
       source = ${nullableString(body.source)},
       pool_date = ${nullableDate(body.poolDate ?? body.pool_date)},
-      work_experience_years = ${valid.workExperienceYears},
       education = ${nullableString(body.education)},
       university = ${nullableString(body.university)},
       major = ${nullableString(body.major)},
+      gpa = ${nullableString(body.gpa)},
       location = ${nullableString(body.location)},
-      rating = ${valid.rating},
+      current_salary = ${nullableString(body.currentSalary ?? body.current_salary)},
+      expected_salary = ${nullableString(body.expectedSalary ?? body.expected_salary)},
       linked_in_profile = ${nullableString(body.linkedInProfile ?? body.linked_in_profile)},
       summary_interview_hr = ${nullableString(body.summaryInterviewHr ?? body.summary_interview_hr)},
       cv_link = ${nullableString(body.cvLink ?? body.cv_link)},
       portfolio_link = ${nullableString(body.portfolioLink ?? body.portfolio_link)},
       psychological_test = ${nullableString(body.psychologicalTest ?? body.psychological_test)},
       feedback_from_user = ${nullableString(body.feedbackFromUser ?? body.feedback_from_user)},
-      interview_date = ${nullableDate(body.interviewDate ?? body.interview_date)},
       hr_interview_date = ${nullableDate(body.hrInterviewDate ?? body.hr_interview_date)},
       user_interview_date = ${nullableDate(body.userInterviewDate ?? body.user_interview_date)},
       updated_at = NOW()
@@ -130,6 +133,11 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const id = await getId(params);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 

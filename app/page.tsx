@@ -19,6 +19,7 @@ import {
   statusClass,
   statusColor,
 } from "@/lib/recruitment";
+import { SessionUser, canAddCandidate, canSeeSalary } from "@/lib/permissions";
 
 type SearchColumn =
   | "name"
@@ -27,7 +28,6 @@ type SearchColumn =
   | "position"
   | "email"
   | "phone"
-  | "progress"
   | "cv";
 const dashboardStatuses: Candidate["status"][] = candidateStatuses;
 
@@ -41,12 +41,12 @@ type DashboardData = {
   };
   byStatus: { statusName: string; candidateCount: number }[];
   byRole: { roleName: string; candidateCount: number }[];
-  byProgress: { progressName: string; candidateCount: number }[];
 };
 
 export default function DashboardPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(
     null,
   );
@@ -89,6 +89,13 @@ export default function DashboardPage() {
     }
 
     loadData();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => setUser(payload?.user || null))
+      .catch(() => setUser(null));
   }, []);
 
   const filteredCandidates = useMemo(() => {
@@ -178,11 +185,7 @@ export default function DashboardPage() {
         })),
       ];
 
-  const progressSummary =
-    dashboard?.byProgress.map((item) => ({
-      label: item.progressName,
-      value: item.candidateCount,
-    })) || [];
+  const showSalary = canSeeSalary(user?.role);
 
   const currentLatestPage = Math.min(
     latestPage,
@@ -284,7 +287,6 @@ export default function DashboardPage() {
                   <option value="position">Position</option>
                   <option value="email">Email</option>
                   <option value="phone">No. HP</option>
-                  <option value="progress">Progress</option>
                   <option value="cv">CV</option>
                 </select>
               </label>
@@ -387,18 +389,6 @@ export default function DashboardPage() {
         <MetricCard label="Rejected" value={totalRejected} />
       </div>
 
-      {progressSummary.length > 0 && (
-        <div className="card flex h-[28rem] flex-col">
-          <div className="mb-5 shrink-0">
-            <h3 className="text-xl font-black">Candidates by Progress</h3>
-            <p className="text-sm text-slate-500">Summary berdasarkan progress</p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
-            <BarChart data={progressSummary} />
-          </div>
-        </div>
-      )}
-
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="card">
           <div className="mb-5 flex items-center justify-between gap-4">
@@ -474,9 +464,11 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href="/candidates/new" className="primary-button">
-              Add Candidate
-            </Link>
+            {canAddCandidate(user?.role) && (
+              <Link href="/candidates/new" className="primary-button">
+                Add Candidate
+              </Link>
+            )}
           </div>
         </div>
 
@@ -490,7 +482,6 @@ export default function DashboardPage() {
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Posisi yang Dilamar</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Progress</th>
                 <th className="px-4 py-3">CV</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
@@ -525,9 +516,6 @@ export default function DashboardPage() {
                     >
                       {candidate.status}
                     </span>
-                  </td>
-                  <td className="px-4 py-4 text-slate-600">
-                    <InteractiveValue value={candidate.progress || "No Progress"} />
                   </td>
                   <td className="px-4 py-4 text-slate-600">
                     <InteractiveValue value={candidate.cvLink} />
@@ -601,6 +589,7 @@ export default function DashboardPage() {
       <CandidateDetailDialog
         candidate={detailCandidate}
         roles={roles}
+        showSalary={showSalary}
         onClose={() => setDetailCandidate(null)}
       />
     </section>
@@ -634,10 +623,6 @@ function matchesDashboardSearch(
 
   if (searchColumn === "phone") {
     return candidate.phoneNumber.toLowerCase().includes(raw);
-  }
-
-  if (searchColumn === "progress") {
-    return candidate.progress.toLowerCase().includes(raw);
   }
 
   if (searchColumn === "cv") {
@@ -678,10 +663,12 @@ function Field({
 function CandidateDetailDialog({
   candidate,
   roles,
+  showSalary,
   onClose,
 }: {
   candidate: Candidate | null;
   roles: Role[];
+  showSalary: boolean;
   onClose: () => void;
 }) {
   if (!candidate) return null;
@@ -697,12 +684,17 @@ function CandidateDetailDialog({
     { label: "Department", value: candidate.department },
     { label: "Source", value: candidate.source },
     { label: "Pool Date", value: candidate.poolDate },
-    { label: "Pengalaman Kerja (Tahun)", value: candidate.workExperienceYears },
     { label: "Pendidikan", value: candidate.education },
     { label: "Universitas", value: candidate.university },
     { label: "Jurusan", value: candidate.major },
+    { label: "IPK / GPA", value: candidate.gpa },
     { label: "Lokasi", value: candidate.location },
-    { label: "Rating (1-5)", value: candidate.rating },
+    ...(showSalary
+      ? [
+          { label: "Current Salary", value: candidate.currentSalary },
+          { label: "Expected Salary", value: candidate.expectedSalary },
+        ]
+      : []),
     { label: "LinkedIn Profile", value: candidate.linkedInProfile },
     { label: "Summary Interview HR", value: candidate.summaryInterviewHr },
     { label: "CV", value: candidate.cvLink },
@@ -710,8 +702,6 @@ function CandidateDetailDialog({
     { label: "Psychological Test", value: candidate.psychologicalTest },
     { label: "Feedback From User", value: candidate.feedbackFromUser },
     { label: "Status", value: candidate.status },
-    { label: "Progress", value: candidate.progress },
-    { label: "Interview Date", value: candidate.interviewDate },
     { label: "HR Interview Date", value: candidate.hrInterviewDate },
     { label: "User Interview Date", value: candidate.userInterviewDate },
     { label: "Created At", value: candidate.createdAt },

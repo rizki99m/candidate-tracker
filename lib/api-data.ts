@@ -38,6 +38,15 @@ export function nullableDate(value: unknown) {
   return value;
 }
 
+export function asBoolean(value: unknown) {
+  return value === true || value === "true" || value === "1" || value === 1;
+}
+
+export function nullableBoolean(value: unknown) {
+  if (value === null || value === undefined || value === "") return false;
+  return asBoolean(value);
+}
+
 export function requiredString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -59,7 +68,6 @@ export function mapRole(row: Record<string, unknown>) {
 
 export function mapCandidate(row: Record<string, unknown>) {
   const statusName = asString(row.status_name) || "No Status";
-  const progressName = asString(row.progress_name);
 
   return {
     id: asString(row.id),
@@ -68,8 +76,6 @@ export function mapCandidate(row: Record<string, unknown>) {
     statusId: asString(row.status_id),
     statusName,
     statusColorHex: asString(row.status_color_hex),
-    progressId: asString(row.progress_id),
-    progressName: progressName || "No Progress",
     position: asString(row.position),
     level: asString(row.level),
     nameOfCandidate: asString(row.name_of_candidate),
@@ -78,12 +84,13 @@ export function mapCandidate(row: Record<string, unknown>) {
     department: asString(row.department),
     source: asString(row.source),
     poolDate: asDateString(row.pool_date),
-    workExperienceYears: asString(row.work_experience_years),
     education: asString(row.education),
     university: asString(row.university),
     major: asString(row.major),
+    gpa: asString(row.gpa),
     location: asString(row.location),
-    rating: asString(row.rating),
+    currentSalary: asString(row.current_salary),
+    expectedSalary: asString(row.expected_salary),
     linkedInProfile: asString(row.linked_in_profile),
     summaryInterviewHr: asString(row.summary_interview_hr),
     cvLink: asString(row.cv_link),
@@ -91,8 +98,6 @@ export function mapCandidate(row: Record<string, unknown>) {
     psychologicalTest: asString(row.psychological_test),
     feedbackFromUser: asString(row.feedback_from_user),
     status: statusName,
-    progress: progressName,
-    interviewDate: asDateString(row.interview_date),
     hrInterviewDate: asDateString(row.hr_interview_date),
     userInterviewDate: asDateString(row.user_interview_date),
     createdAt: asDateString(row.created_at),
@@ -123,6 +128,7 @@ export function mapHireRequest(row: Record<string, unknown>) {
     ),
     statusId: asString(row.status_id),
     status: asString(row.status_name) || "Assigned",
+    isUrgent: asBoolean(row.is_urgent),
     createdAt: asDateString(row.created_at),
     updatedAt: asDateString(row.updated_at),
   };

@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { CandidateForm } from "@/components/CandidateForm";
 import {
   Candidate,
-  CandidateProgressLookup,
   CandidateStatusLookup,
   Role,
   fetchCandidate,
@@ -21,7 +20,6 @@ export default function EditCandidatePage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [candidateStatuses, setCandidateStatuses] = useState<CandidateStatusLookup[]>([]);
-  const [candidateProgresses, setCandidateProgresses] = useState<CandidateProgressLookup[]>([]);
 
   useEffect(() => {
     Promise.all([fetchLookups(), fetchCandidate(id)]).then(([lookups, found]) => {
@@ -35,7 +33,6 @@ export default function EditCandidatePage() {
         })),
       );
       setCandidateStatuses(lookups.candidateStatuses);
-      setCandidateProgresses(lookups.candidateProgresses);
       setCandidate(found);
     });
   }, [id]);
@@ -49,7 +46,6 @@ export default function EditCandidatePage() {
       | "roleName"
       | "statusName"
       | "statusColorHex"
-      | "progressName"
     >,
   ) {
     await updateCandidate(id, data);
@@ -69,7 +65,6 @@ export default function EditCandidatePage() {
     <CandidateForm
       roles={roles}
       candidateStatusesLookup={candidateStatuses}
-      candidateProgressesLookup={candidateProgresses}
       initialCandidate={candidate}
       submitLabel="Update Candidate"
       onSubmit={handleSubmit}

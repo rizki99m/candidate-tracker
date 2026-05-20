@@ -11,13 +11,6 @@ export type CandidateStatus =
   | "No Status"
   | string;
 
-export type CandidateProgress =
-  | ""
-  | "Psychological Test"
-  | "Agency Task"
-  | "No Progress"
-  | string;
-
 export type HireRequestStatus = "Assigned" | "In Progress" | "Resolved" | string;
 
 export type DateFilter = "today" | "month" | "year" | "custom" | "all";
@@ -33,10 +26,6 @@ export type CandidateStatusLookup = LookupItem & {
   isTerminal?: boolean;
 };
 
-export type CandidateProgressLookup = LookupItem & {
-  isActive?: boolean;
-};
-
 export type RoleLookup = LookupItem & {
   department: string;
   level: string;
@@ -45,7 +34,6 @@ export type RoleLookup = LookupItem & {
 export type Lookups = {
   roleStatuses: LookupItem[];
   candidateStatuses: CandidateStatusLookup[];
-  candidateProgresses: CandidateProgressLookup[];
   hireRequestStatuses: LookupItem[];
   roles: RoleLookup[];
 };
@@ -69,8 +57,6 @@ export type Candidate = {
   statusId: string;
   statusName: string;
   statusColorHex: string;
-  progressId: string;
-  progressName: string;
   position: string;
   level: string;
   nameOfCandidate: string;
@@ -79,12 +65,13 @@ export type Candidate = {
   department: string;
   source: string;
   poolDate: string;
-  workExperienceYears: string;
   education: string;
   university: string;
   major: string;
+  gpa: string;
   location: string;
-  rating: string;
+  currentSalary: string;
+  expectedSalary: string;
   linkedInProfile: string;
   summaryInterviewHr: string;
   cvLink: string;
@@ -92,8 +79,6 @@ export type Candidate = {
   psychologicalTest: string;
   feedbackFromUser: string;
   status: CandidateStatus;
-  progress: CandidateProgress;
-  interviewDate: string;
   hrInterviewDate: string;
   userInterviewDate: string;
   createdAt: string;
@@ -120,6 +105,7 @@ export type HireRequest = {
   preferencesCandidateResidencies: string;
   statusId: string;
   status: HireRequestStatus;
+  isUrgent: boolean;
   createdAt: string;
   updatedAt?: string;
 };
@@ -132,12 +118,6 @@ export const candidateStatuses: CandidateStatus[] = [
   "Rejected",
   "On Hold",
   "Withdraw",
-];
-
-export const candidateProgresses: CandidateProgress[] = [
-  "",
-  "Psychological Test",
-  "Agency Task",
 ];
 
 export const hireRequestStatuses: HireRequestStatus[] = [
@@ -208,7 +188,7 @@ export async function fetchCandidate(id: string) {
 }
 
 export async function createCandidate(
-  data: Omit<Candidate, "id" | "createdAt" | "updatedAt" | "roleName" | "statusName" | "statusColorHex" | "progressName">,
+  data: Omit<Candidate, "id" | "createdAt" | "updatedAt" | "roleName" | "statusName" | "statusColorHex">,
 ) {
   return apiFetch<Candidate>("/api/candidates", {
     method: "POST",
@@ -218,7 +198,7 @@ export async function createCandidate(
 
 export async function updateCandidate(
   id: string,
-  data: Omit<Candidate, "id" | "createdAt" | "updatedAt" | "roleName" | "statusName" | "statusColorHex" | "progressName">,
+  data: Omit<Candidate, "id" | "createdAt" | "updatedAt" | "roleName" | "statusName" | "statusColorHex">,
 ) {
   return apiFetch<Candidate>(`/api/candidates/${id}`, {
     method: "PUT",
@@ -276,7 +256,6 @@ export function getRoleName(roles: Role[] | RoleLookup[], roleId: string) {
 
 export function getCandidateMainDate(candidate: Candidate) {
   return (
-    candidate.interviewDate ||
     candidate.hrInterviewDate ||
     candidate.userInterviewDate ||
     candidate.poolDate ||

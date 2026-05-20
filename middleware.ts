@@ -20,13 +20,16 @@ function isPublicAsset(pathname: string) {
 
 async function hasValidSession(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!token || !process.env.SESSION_SECRET) return false;
+  if (!token || !process.env.SESSION_SECRET) return null;
 
   try {
-    await jwtVerify(token, new TextEncoder().encode(process.env.SESSION_SECRET));
-    return true;
+    const { payload } = await jwtVerify(
+      token,
+      new TextEncoder().encode(process.env.SESSION_SECRET),
+    );
+    return payload;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -37,7 +40,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/login") ||
     isPublicAsset(pathname);
 
-  const authenticated = await hasValidSession(request);
+  const session = await hasValidSession(request);
+  const authenticated = !!session;
 
   if (pathname === "/login" && authenticated) {
     return NextResponse.redirect(new URL("/", request.url));
@@ -55,6 +59,23 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (
+    session?.role === "guest" &&
+    !pathname.startsWith("/api/") &&
+    pathname !== "/" &&
+    pathname !== "/candidates"
+  ) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (
+    session?.role !== "admin" &&
+    !pathname.startsWith("/api/") &&
+    (pathname === "/candidates/new" || pathname === "/roles/new")
+  ) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();

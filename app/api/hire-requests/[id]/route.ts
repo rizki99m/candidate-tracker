@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import {
   mapHireRequest,
+  nullableBoolean,
   nullableDate,
   nullableInt,
   nullablePositiveInt,
   nullableString,
   requiredString,
 } from "@/lib/api-data";
+import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 async function getId(params: Promise<{ id: string }>) {
@@ -23,7 +25,8 @@ async function findHireRequest(id: number) {
       h.experience_requirements_skills, h.additional_nice_to_have_skills,
       h.working_experience, h.education_required, h.majoring_preferences,
       h.age_range, h.preferences_gender, h.preferences_candidate_residencies,
-      h.status_id, hrs.name AS status_name, h.created_at, h.updated_at
+      h.status_id, hrs.name AS status_name, h.is_urgent,
+      h.created_at, h.updated_at
     FROM hire_requests h
     LEFT JOIN hire_request_statuses hrs ON hrs.id = h.status_id
     WHERE h.id = ${id}
@@ -52,6 +55,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const id = await getId(params);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
@@ -95,6 +103,7 @@ export async function PUT(
       preferences_gender = ${nullableString(body.preferencesGender ?? body.preferences_gender)},
       preferences_candidate_residencies = ${nullableString(body.preferencesCandidateResidencies ?? body.preferences_candidate_residencies)},
       status_id = ${nullableInt(body.statusId ?? body.status_id)},
+      is_urgent = ${nullableBoolean(body.isUrgent ?? body.is_urgent)},
       updated_at = NOW()
     WHERE id = ${id}
   `;
@@ -111,6 +120,11 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const id = await getId(params);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   mapHireRequest,
+  nullableBoolean,
   nullableDate,
   nullableInt,
   nullablePositiveInt,
@@ -19,16 +20,22 @@ export async function GET() {
       h.experience_requirements_skills, h.additional_nice_to_have_skills,
       h.working_experience, h.education_required, h.majoring_preferences,
       h.age_range, h.preferences_gender, h.preferences_candidate_residencies,
-      h.status_id, hrs.name AS status_name, h.created_at, h.updated_at
+      h.status_id, hrs.name AS status_name, h.is_urgent,
+      h.created_at, h.updated_at
     FROM hire_requests h
     LEFT JOIN hire_request_statuses hrs ON hrs.id = h.status_id
-    ORDER BY h.created_at DESC
+    ORDER BY h.is_urgent DESC, h.created_at DESC
   `;
 
   return NextResponse.json(rows.map(mapHireRequest));
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "user"].includes(user.role.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const requestedBy = requiredString(body.requestedBy ?? body.requested_by);
   const positionTitle = requiredString(body.positionTitle ?? body.position_title);
@@ -49,7 +56,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const user = await getCurrentUser();
   const rows = await sql`
     INSERT INTO hire_requests (
       requested_by, reason_for_hiring, position_title, department_division,
@@ -57,7 +63,7 @@ export async function POST(request: Request) {
       description_scope_of_work, experience_requirements_skills,
       additional_nice_to_have_skills, working_experience, education_required,
       majoring_preferences, age_range, preferences_gender,
-      preferences_candidate_residencies, status_id, created_by_user_id
+      preferences_candidate_residencies, status_id, is_urgent, created_by_user_id
     )
     VALUES (
       ${requestedBy},
@@ -77,6 +83,7 @@ export async function POST(request: Request) {
       ${nullableString(body.preferencesGender ?? body.preferences_gender)},
       ${nullableString(body.preferencesCandidateResidencies ?? body.preferences_candidate_residencies)},
       ${nullableInt(body.statusId ?? body.status_id)},
+      ${nullableBoolean(body.isUrgent ?? body.is_urgent)},
       ${user?.id ?? null}
     )
     RETURNING id
@@ -91,7 +98,8 @@ export async function POST(request: Request) {
       h.experience_requirements_skills, h.additional_nice_to_have_skills,
       h.working_experience, h.education_required, h.majoring_preferences,
       h.age_range, h.preferences_gender, h.preferences_candidate_residencies,
-      h.status_id, hrs.name AS status_name, h.created_at, h.updated_at
+      h.status_id, hrs.name AS status_name, h.is_urgent,
+      h.created_at, h.updated_at
     FROM hire_requests h
     LEFT JOIN hire_request_statuses hrs ON hrs.id = h.status_id
     WHERE h.id = ${id}

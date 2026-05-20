@@ -33,6 +33,7 @@ type SearchColumn =
   | "preferencesGender"
   | "preferencesCandidateResidencies"
   | "status"
+  | "isUrgent"
   | "createdAt";
 
 const columnLabels: { key: SearchColumn; label: string }[] = [
@@ -62,6 +63,7 @@ const columnLabels: { key: SearchColumn; label: string }[] = [
     label: "Preferences Candidate Residencies",
   },
   { key: "status", label: "Status" },
+  { key: "isUrgent", label: "Urgency" },
   { key: "createdAt", label: "Created At" },
 ];
 
@@ -234,7 +236,7 @@ export default function HireRequestsPage() {
       )}
 
       {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm xl:block">
-        <table className="w-full min-w-[2800px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[2900px] border-collapse text-left text-sm">
           <thead className="bg-slate-950 text-white">
             <tr>
               <th className="px-4 py-3">No</th>
@@ -243,6 +245,7 @@ export default function HireRequestsPage() {
                   {column.label}
                 </th>
               ))}
+              <th className="px-4 py-3">Flag</th>
               <th className="px-4 py-3 text-right">Action</th>
             </tr>
           </thead>
@@ -265,6 +268,8 @@ export default function HireRequestsPage() {
                       >
                         {hireRequest.status}
                       </span>
+                    ) : column.key === "isUrgent" ? (
+                      hireRequest.isUrgent ? "Urgent" : "-"
                     ) : (
                       <InteractiveValue
                         value={hireRequestSearchValue(
@@ -275,6 +280,9 @@ export default function HireRequestsPage() {
                     )}
                   </td>
                 ))}
+                <td className="px-4 py-4">
+                  {hireRequest.isUrgent && <UrgentBadge />}
+                </td>
                 <td className="px-4 py-4">
                   <div className="flex justify-end gap-2">
                     <button
@@ -303,7 +311,7 @@ export default function HireRequestsPage() {
             {filteredHireRequests.length === 0 && (
               <tr>
                 <td
-                  colSpan={columnLabels.length + 2}
+                  colSpan={columnLabels.length + 3}
                   className="px-4 py-8 text-center text-slate-500"
                 >
                   Belum ada hire request.
@@ -335,6 +343,11 @@ export default function HireRequestsPage() {
                 {hireRequest.status}
               </span>
             </div>
+            {hireRequest.isUrgent && (
+              <div className="mt-3">
+                <UrgentBadge />
+              </div>
+            )}
 
             <div className="mt-4 space-y-2 text-sm text-slate-600">
               <p>
@@ -454,7 +467,16 @@ function hireRequestSearchValue(
   hireRequest: HireRequest,
   column: SearchColumn,
 ) {
+  if (column === "isUrgent") return hireRequest.isUrgent ? "Urgent" : "";
   return String(hireRequest[column] || "");
+}
+
+function UrgentBadge() {
+  return (
+    <span className="inline-flex rounded-md bg-red-600 px-3 py-1 text-xs font-black text-white">
+      Urgent
+    </span>
+  );
 }
 
 function Field({

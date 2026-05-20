@@ -13,6 +13,7 @@ import {
   deleteRole as deleteRoleRequest,
   fetchRoles,
 } from "@/lib/recruitment";
+import { SessionUser, canAddRole } from "@/lib/permissions";
 
 type SearchColumn = "name" | "department" | "level" | "status" | "notes";
 
@@ -26,6 +27,7 @@ const emptySearchFilters: Record<SearchColumn, string> = {
 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [detailRole, setDetailRole] = useState<Role | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -50,6 +52,13 @@ export default function RolesPage() {
     }
 
     loadData();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => setUser(payload?.user || null))
+      .catch(() => setUser(null));
   }, []);
 
   const filteredRoles = useMemo(() => {
@@ -115,9 +124,11 @@ export default function RolesPage() {
     <section className="space-y-6">
       <div className="card">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <Link href="/roles/new" className="primary-button">
-            Add Role
-          </Link>
+          {canAddRole(user?.role) && (
+            <Link href="/roles/new" className="primary-button">
+              Add Role
+            </Link>
+          )}
 
           <div className="w-full max-w-md">
             <label className="block">
