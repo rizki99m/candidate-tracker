@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LookupItem, Role, RoleStatus, roleStatuses } from "@/lib/recruitment";
+import { LookupItem, Role, RoleStatus } from "@/lib/recruitment";
 
 export function RoleForm({
   initialRole,
@@ -21,7 +21,7 @@ export function RoleForm({
     department: initialRole?.department || "",
     level: initialRole?.level || "",
     statusId: initialRole?.statusId || roleStatusesLookup[0]?.id || "",
-    status: (initialRole?.status || "Active") as RoleStatus,
+    status: (initialRole?.status || roleStatusesLookup[0]?.name || "") as RoleStatus,
     notes: initialRole?.notes || "",
   });
 
@@ -116,11 +116,12 @@ export function RoleForm({
             }));
           }}
           className="input"
+          disabled={roleStatusesLookup.length === 0}
         >
-          {(roleStatusesLookup.length
-            ? roleStatusesLookup
-            : roleStatuses.map((status) => ({ id: status, name: status }))
-          ).map((status) => (
+          {roleStatusesLookup.length === 0 && (
+            <option value="">No status from database</option>
+          )}
+          {roleStatusesLookup.map((status) => (
             <option key={status.id} value={status.id}>
               {status.name}
             </option>

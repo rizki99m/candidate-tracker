@@ -9,10 +9,11 @@ import {
 } from "@/components/PaginationControls";
 import {
   Candidate,
+  CandidateStatusLookup,
   DateFilter,
   Role,
-  candidateStatuses,
   fetchCandidates,
+  fetchLookups,
   fetchRoles,
   filterCandidates,
   getRoleName,
@@ -20,6 +21,7 @@ import {
   statusColor,
 } from "@/lib/recruitment";
 import { SessionUser, canAddCandidate, canSeeSalary } from "@/lib/permissions";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 
 type SearchColumn =
   | "name"
@@ -29,8 +31,6 @@ type SearchColumn =
   | "email"
   | "phone"
   | "cv";
-const dashboardStatuses: Candidate["status"][] = candidateStatuses;
-
 type DashboardData = {
   totals: {
     totalCandidates: number;
@@ -46,6 +46,9 @@ type DashboardData = {
 export default function DashboardPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidateStatusesLookup, setCandidateStatusesLookup] = useState<
+    CandidateStatusLookup[]
+  >([]);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(
     null,
@@ -70,16 +73,19 @@ export default function DashboardPage() {
       setLoading(true);
       setError("");
       try {
-        const [rolesData, candidatesData, dashboardResponse] = await Promise.all([
-          fetchRoles(),
-          fetchCandidates(),
-          fetch("/api/dashboard").then((response) => {
-            if (!response.ok) throw new Error("Gagal memuat dashboard.");
-            return response.json() as Promise<DashboardData>;
-          }),
-        ]);
+        const [rolesData, candidatesData, lookups, dashboardResponse] =
+          await Promise.all([
+            fetchRoles(),
+            fetchCandidates(),
+            fetchLookups(),
+            fetch("/api/dashboard").then((response) => {
+              if (!response.ok) throw new Error("Gagal memuat dashboard.");
+              return response.json() as Promise<DashboardData>;
+            }),
+          ]);
         setRoles(rolesData);
         setCandidates(candidatesData);
+        setCandidateStatusesLookup(lookups.candidateStatuses);
         setDashboard(dashboardResponse);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Gagal memuat dashboard.");
@@ -160,10 +166,11 @@ export default function DashboardPage() {
         status: item.statusName,
         count: item.candidateCount,
       }))
-    : dashboardStatuses.map((status) => ({
-        status,
+    : candidateStatusesLookup.map((status) => ({
+        status: status.name,
         count: statusDistributionCandidates.filter(
-          (candidate) => candidate.status === status,
+          (candidate) =>
+            candidate.statusId === status.id || candidate.status === status.name,
         ).length,
       }));
 
@@ -237,7 +244,7 @@ export default function DashboardPage() {
       )}
       {loading && (
         <div className="card text-sm font-semibold text-slate-500">
-          Loading dashboard...
+          <LoadingIndicator label="Loading dashboard from database..." />
         </div>
       )}
 
@@ -342,9 +349,9 @@ export default function DashboardPage() {
                   className="input"
                 >
                   <option value="all">All Status</option>
-                  {dashboardStatuses.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
+                  {candidateStatusesLookup.map((status) => (
+                    <option key={status.id} value={status.name}>
+                      {status.name}
                     </option>
                   ))}
                 </select>
@@ -403,8 +410,14 @@ export default function DashboardPage() {
           <DonutChart
             data={statusSummary}
             activeStatus={
-              dashboardStatuses.includes(statusFilter as Candidate["status"])
-                ? (statusFilter as Candidate["status"])
+              candidateStatusesLookup.some(
+                (status) =>
+                  status.id === statusFilter || status.name === statusFilter,
+              )
+                ? (candidateStatusesLookup.find(
+                    (status) =>
+                      status.id === statusFilter || status.name === statusFilter,
+                  )?.name as Candidate["status"])
                 : null
             }
             onStatusClick={toggleStatusFilter}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CandidateForm } from "@/components/CandidateForm";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import {
   Candidate,
   CandidateStatusLookup,
@@ -15,20 +16,23 @@ export default function NewCandidatePage() {
   const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidateStatuses, setCandidateStatuses] = useState<CandidateStatusLookup[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchLookups().then((lookups) => {
-      setRoles(
-        lookups.roles.map((role) => ({
-          ...role,
-          statusId: "",
-          status: "Active",
-          notes: "",
-          createdAt: "",
-        })),
-      );
-      setCandidateStatuses(lookups.candidateStatuses);
-    });
+    fetchLookups()
+      .then((lookups) => {
+        setRoles(
+          lookups.roles.map((role) => ({
+            ...role,
+            statusId: "",
+            status: "Active",
+            notes: "",
+            createdAt: "",
+          })),
+        );
+        setCandidateStatuses(lookups.candidateStatuses);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleSubmit(
@@ -44,6 +48,14 @@ export default function NewCandidatePage() {
   ) {
     await createCandidate(data);
     router.push("/candidates");
+  }
+
+  if (loading) {
+    return (
+      <div className="card text-sm font-semibold text-slate-500">
+        <LoadingIndicator label="Loading form data from database..." />
+      </div>
+    );
   }
 
   return (

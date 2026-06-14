@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HireRequestForm } from "@/components/HireRequestForm";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import {
   HireRequest,
   LookupItem,
@@ -13,11 +14,14 @@ import {
 export default function NewHireRequestPage() {
   const router = useRouter();
   const [hireRequestStatuses, setHireRequestStatuses] = useState<LookupItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchLookups().then((lookups) =>
-      setHireRequestStatuses(lookups.hireRequestStatuses),
-    );
+    fetchLookups()
+      .then((lookups) =>
+        setHireRequestStatuses(lookups.hireRequestStatuses),
+      )
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleSubmit(
@@ -25,6 +29,14 @@ export default function NewHireRequestPage() {
   ) {
     await createHireRequest(data);
     router.push("/hire-requests");
+  }
+
+  if (loading) {
+    return (
+      <div className="card text-sm font-semibold text-slate-500">
+        <LoadingIndicator label="Loading form data from database..." />
+      </div>
+    );
   }
 
   return (

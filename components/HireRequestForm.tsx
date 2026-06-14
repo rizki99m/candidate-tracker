@@ -5,7 +5,6 @@ import {
   HireRequest,
   HireRequestStatus,
   LookupItem,
-  hireRequestStatuses,
   todayString,
 } from "@/lib/recruitment";
 
@@ -75,7 +74,7 @@ export function HireRequestForm({
     preferencesCandidateResidencies:
       initialHireRequest?.preferencesCandidateResidencies || "",
     statusId: initialHireRequest?.statusId || hireRequestStatusesLookup[0]?.id || "",
-    status: initialHireRequest?.status || "Assigned",
+    status: initialHireRequest?.status || hireRequestStatusesLookup[0]?.name || "",
     isUrgent: initialHireRequest?.isUrgent || false,
   });
 
@@ -113,7 +112,9 @@ export function HireRequestForm({
       preferencesCandidateResidencies:
         form.preferencesCandidateResidencies.trim(),
       statusId: form.statusId,
-      status: isEdit ? form.status : "Assigned",
+      status: isEdit
+        ? form.status
+        : hireRequestStatusesLookup[0]?.name || form.status,
       isUrgent: form.isUrgent,
     });
   }
@@ -123,7 +124,7 @@ export function HireRequestForm({
       <div>
         <h3 className="text-2xl font-black text-slate-950">{submitLabel}</h3>
         <p className="mt-2 text-sm text-slate-500">
-          Status otomatis Assigned saat hire request baru dibuat.
+          Status mengikuti lookup yang tersimpan di database.
         </p>
       </div>
 
@@ -177,14 +178,12 @@ export function HireRequestForm({
                 }));
               }}
               className="input"
+              disabled={hireRequestStatusesLookup.length === 0}
             >
-              {(hireRequestStatusesLookup.length
-                ? hireRequestStatusesLookup
-                : hireRequestStatuses.map((status) => ({
-                    id: status,
-                    name: status,
-                  }))
-              ).map((status) => (
+              {hireRequestStatusesLookup.length === 0 && (
+                <option value="">No status from database</option>
+              )}
+              {hireRequestStatusesLookup.map((status) => (
                 <option key={status.id} value={status.id}>
                   {status.name}
                 </option>

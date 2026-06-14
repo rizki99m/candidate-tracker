@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { RoleForm } from "@/components/RoleForm";
 import {
   LookupItem,
@@ -18,17 +19,28 @@ export default function EditRolePage() {
 
   const [role, setRole] = useState<Role | null>(null);
   const [roleStatuses, setRoleStatuses] = useState<LookupItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchLookups(), fetchRole(id)]).then(([lookups, found]) => {
-      setRoleStatuses(lookups.roleStatuses);
-      setRole(found);
-    });
+    Promise.all([fetchLookups(), fetchRole(id)])
+      .then(([lookups, found]) => {
+        setRoleStatuses(lookups.roleStatuses);
+        setRole(found);
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
   async function handleSubmit(data: Omit<Role, "id" | "createdAt" | "updatedAt">) {
     await updateRole(id, data);
     router.push("/roles");
+  }
+
+  if (loading) {
+    return (
+      <div className="card text-sm font-semibold text-slate-500">
+        <LoadingIndicator label="Loading role from database..." />
+      </div>
+    );
   }
 
   if (!role) {

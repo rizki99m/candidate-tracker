@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { InteractiveValue } from "@/components/InteractiveValue";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import {
   PageSize,
   PaginationControls,
@@ -12,7 +13,6 @@ import {
   Candidate,
   CandidateStatusLookup,
   Role,
-  candidateStatuses,
   createCandidate,
   deleteCandidate as deleteCandidateRequest,
   filterCandidates,
@@ -69,6 +69,19 @@ const emptySearchFilters = Object.fromEntries(
   candidateColumns.map((column) => [column.key, ""]),
 ) as Record<SearchColumn, string>;
 
+type ImportFailure = {
+  rowNumber: number;
+  candidate: Partial<Candidate>;
+  errors: string[];
+};
+
+type ResultDialogState = {
+  title: string;
+  description: string;
+  tone?: "success" | "warning" | "error";
+  failures?: ImportFailure[];
+} | null;
+
 export default function CandidatesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -92,7 +105,9 @@ export default function CandidatesPage() {
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
+  const [resultDialog, setResultDialog] = useState<ResultDialogState>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -219,19 +234,38 @@ export default function CandidatesPage() {
   async function deleteCandidate() {
     if (!selectedCandidate) return;
 
+    const candidateName = selectedCandidate.nameOfCandidate;
     try {
       await deleteCandidateRequest(selectedCandidate.id);
       setCandidates((current) =>
         current.filter((candidate) => candidate.id !== selectedCandidate.id),
       );
       setSelectedCandidate(null);
+      setResultDialog({
+        title: "Data berhasil dihapus",
+        description: `Kandidat "${candidateName}" sudah dihapus dari database.`,
+        tone: "success",
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal menghapus kandidat.");
+      setResultDialog({
+        title: "Gagal menghapus data",
+        description:
+          err instanceof Error ? err.message : "Gagal menghapus kandidat.",
+        tone: "error",
+      });
     }
   }
 
-  function exportCandidates() {
-    exportCandidatesToExcel(filteredCandidates, roles);
+  async function exportCandidates() {
+    setExporting(true);
+    try {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      exportCandidatesToExcel(filteredCandidates, roles);
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function importCandidates(event: React.ChangeEvent<HTMLInputElement>) {
@@ -247,23 +281,39 @@ export default function CandidatesPage() {
       );
 
       if (imported.length === 0) {
-        alert("File import tidak punya data kandidat.");
+        setResultDialog({
+          title: "Import gagal",
+          description: "File import tidak punya data kandidat.",
+          tone: "error",
+        });
         return;
       }
 
       const created: Candidate[] = [];
-      const failed: string[] = [];
+      const failed: ImportFailure[] = [];
 
       for (const [index, candidate] of imported.entries()) {
         const rowNumber = index + 2;
+        const validationErrors = validateImportedCandidate(candidate);
+        if (validationErrors.length > 0) {
+          failed.push({
+            rowNumber,
+            candidate,
+            errors: validationErrors,
+          });
+          continue;
+        }
+
         try {
           created.push(await createCandidate(candidate));
         } catch (err) {
-          failed.push(
-            `Row ${rowNumber}: ${
-              err instanceof Error ? err.message : "Gagal import kandidat."
-            }`,
-          );
+          failed.push({
+            rowNumber,
+            candidate,
+            errors: [
+              err instanceof Error ? err.message : "Gagal import kandidat.",
+            ],
+          });
         }
       }
 
@@ -271,9 +321,13 @@ export default function CandidatesPage() {
         setCandidates((current) => [...created, ...current]);
       }
 
-      alert(buildImportSummary(created.length, failed));
+      setResultDialog(buildImportResultDialog(created.length, failed));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal import kandidat.");
+      setResultDialog({
+        title: "Import gagal",
+        description: err instanceof Error ? err.message : "Gagal import kandidat.",
+        tone: "error",
+      });
     } finally {
       setImporting(false);
     }
@@ -351,9 +405,9 @@ export default function CandidatesPage() {
                   className="input"
                 >
                   <option value="all">All Status</option>
-                  {candidateStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  {candidateStatusesLookup.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.name}
                     </option>
                   ))}
                 </select>
@@ -381,12 +435,19 @@ export default function CandidatesPage() {
 
       {loading && (
         <div className="card text-sm font-semibold text-slate-500">
-          Loading candidates...
+          <LoadingIndicator label="Loading candidates from database..." />
         </div>
       )}
 
       {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
-        <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
+          <colgroup>
+            <col className="w-16" />
+            {tableColumns.map((column) => (
+              <col key={column.key} className="w-[10rem]" />
+            ))}
+            <col className="w-[18rem]" />
+          </colgroup>
           <thead className="bg-slate-950 text-white">
             <tr>
               <th className="px-4 py-3">No</th>
@@ -407,13 +468,13 @@ export default function CandidatesPage() {
                 {tableColumns.map((column) => (
                   <td
                     key={column.key}
-                    className="max-w-xs px-4 py-4 text-slate-600"
+                    className="min-w-0 overflow-hidden px-4 py-4 text-slate-600"
                   >
                     {renderCandidateValue(candidate, roles, column.key)}
                   </td>
                 ))}
                 <td className="px-4 py-4">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex min-w-max justify-end gap-2">
                     <button
                       onClick={() => setDetailCandidate(candidate)}
                       className="secondary-button px-3 py-2 text-xs"
@@ -526,7 +587,7 @@ export default function CandidatesPage() {
       <div className="flex flex-wrap justify-end gap-2">
         {canImportCandidates(user?.role) && (
           <label className="secondary-button cursor-pointer">
-            {importing ? "Importing..." : "Import CSV"}
+            {importing ? <LoadingIndicator label="Importing..." /> : "Import CSV"}
             <input
               type="file"
               accept=".csv,text/csv"
@@ -540,9 +601,10 @@ export default function CandidatesPage() {
           <button
             type="button"
             onClick={exportCandidates}
-            className="secondary-button"
+            disabled={exporting}
+            className="secondary-button disabled:opacity-60"
           >
-            Export to Excel
+            {exporting ? <LoadingIndicator label="Exporting..." /> : "Export to Excel"}
           </button>
         )}
       </div>
@@ -561,6 +623,11 @@ export default function CandidatesPage() {
         roles={roles}
         columns={detailColumns}
         onClose={() => setDetailCandidate(null)}
+      />
+
+      <ResultDialog
+        result={resultDialog}
+        onClose={() => setResultDialog(null)}
       />
     </section>
   );
@@ -655,7 +722,13 @@ function renderCandidateValue(
     );
   }
 
-  return <InteractiveValue value={value} truncate={truncate} />;
+  return (
+    <InteractiveValue
+      value={value}
+      truncate={truncate}
+      className={truncate ? "block max-w-full truncate" : ""}
+    />
+  );
 }
 
 function exportCandidatesToExcel(candidates: Candidate[], roles: Role[]) {
@@ -692,13 +765,24 @@ function parseCandidateCsv(text: string) {
 
   const headers = rows[0].map((header) => normalizeHeader(header));
   return rows.slice(1).flatMap((row) => {
+    const cells = normalizeCandidateCsvRow(row, headers.length);
     if (row.every((cell) => !cell.trim())) return [];
     return [
       Object.fromEntries(
-        headers.map((header, index) => [header, row[index]?.trim() || ""]),
+        headers.map((header, index) => [header, cells[index]?.trim() || ""]),
       ),
     ];
   });
+}
+
+function normalizeCandidateCsvRow(row: string[], expectedColumns: number) {
+  if (row.length !== 1 || expectedColumns <= 1 || !row[0]?.includes(",")) {
+    return row;
+  }
+
+  const recoveredRows = parseCsvRows(row[0].trim());
+  const recovered = recoveredRows[0] || row;
+  return recovered.length > row.length ? recovered : row;
 }
 
 function parseCsvRows(text: string) {
@@ -754,14 +838,21 @@ function buildImportedCandidate(
       item.id === roleText ||
       item.name.toLowerCase() === roleText.toLowerCase(),
   );
+  const statusFromDateColumn = findStatusLookup(
+    statuses,
+    getImportValue(row, ["hr_interview_date", "user_interview_date"]),
+  );
   const statusText =
     getImportValue(row, ["status", "candidate_status"]) ||
+    statusFromDateColumn?.name ||
     statuses[0]?.name ||
-    "HR Interview";
-  const status = statuses.find(
-    (item) =>
-      item.id === statusText ||
-      item.name.toLowerCase() === statusText.toLowerCase(),
+    "";
+  const status = findStatusLookup(statuses, statusText);
+  const hrInterviewDate = normalizeImportDate(
+    getImportValue(row, ["hr_interview_date"]),
+  );
+  const userInterviewDate = normalizeImportDate(
+    getImportValue(row, ["user_interview_date"]),
   );
 
   return {
@@ -781,7 +872,9 @@ function buildImportedCandidate(
       role?.department ||
       "",
     source: getImportValue(row, ["source", "sumber"]),
-    poolDate: getImportValue(row, ["pool_date", "tanggal_masuk"]) || todayIso(),
+    poolDate:
+      normalizeImportDate(getImportValue(row, ["pool_date", "tanggal_masuk"])) ||
+      todayIso(),
     education: getImportValue(row, ["education", "pendidikan"]),
     university: getImportValue(row, ["university", "universitas"]),
     major: getImportValue(row, ["major", "jurusan"]),
@@ -804,31 +897,72 @@ function buildImportedCandidate(
     feedbackFromUser: getImportValue(row, ["summary_user", "feedback_from_user"]),
     statusId: status?.id || "",
     status: status?.name || statusText,
-    hrInterviewDate: getImportValue(row, ["hr_interview_date"]),
-    userInterviewDate: getImportValue(row, ["user_interview_date"]),
+    hrInterviewDate,
+    userInterviewDate,
   };
 }
 
-function buildImportSummary(successCount: number, failed: string[]) {
-  if (failed.length === 0) {
-    return `${successCount} kandidat berhasil diimport.`;
+function findStatusLookup(statuses: CandidateStatusLookup[], value: string) {
+  const normalized = normalizeImportText(value);
+  if (!normalized) return undefined;
+  return statuses.find(
+    (item) =>
+      normalizeImportText(item.id) === normalized ||
+      normalizeImportText(item.name) === normalized,
+  );
+}
+
+function validateImportedCandidate(
+  candidate: Omit<
+    Candidate,
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "roleName"
+    | "statusName"
+    | "statusColorHex"
+  >,
+) {
+  const errors: string[] = [];
+
+  if (!candidate.nameOfCandidate.trim()) {
+    errors.push("Name of Candidate wajib diisi.");
   }
 
-  const visibleErrors = failed.slice(0, 15).join("\n");
-  const remaining =
-    failed.length > 15 ? `\n...dan ${failed.length - 15} error lainnya.` : "";
+  if (!candidate.position.trim()) {
+    errors.push("Position wajib diisi.");
+  }
 
-  return [
-    `Import selesai.`,
-    `Berhasil: ${successCount}`,
-    `Gagal: ${failed.length}`,
-    "",
-    "Detail gagal:",
-    visibleErrors,
-    remaining,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return errors;
+}
+
+function buildImportResultDialog(
+  successCount: number,
+  failed: ImportFailure[],
+): ResultDialogState {
+  if (failed.length === 0) {
+    return {
+      title: "Import berhasil",
+      description: `${successCount} kandidat berhasil diinput ke database.`,
+      tone: "success",
+    };
+  }
+
+  if (successCount === 0) {
+    return {
+      title: "Import gagal",
+      description: `Tidak ada kandidat yang berhasil diinput. ${failed.length} row gagal diproses.`,
+      tone: "error",
+      failures: failed,
+    };
+  }
+
+  return {
+    title: "Import selesai dengan catatan",
+    description: `${successCount} kandidat berhasil diinput, ${failed.length} row gagal diproses.`,
+    tone: "warning",
+    failures: failed,
+  };
 }
 
 function getImportValue(row: Record<string, string>, keys: string[]) {
@@ -847,6 +981,56 @@ function normalizeRupiah(value: string) {
   const digits = value.replace(/\D/g, "");
   if (!digits) return value.trim();
   return `Rp ${Number(digits).toLocaleString("id-ID")}`;
+}
+
+function normalizeImportDate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^[a-z\s]+$/i.test(trimmed)) return "";
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return validDateParts(year, month, day)
+      ? `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+      : "";
+  }
+
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!slashMatch) return "";
+
+  const [, first, second, year] = slashMatch;
+  const dayFirst =
+    Number(first) > 12 || Number(second) <= 12
+      ? { day: first, month: second }
+      : { day: second, month: first };
+
+  return validDateParts(year, dayFirst.month, dayFirst.day)
+    ? `${year}-${dayFirst.month.padStart(2, "0")}-${dayFirst.day.padStart(2, "0")}`
+    : "";
+}
+
+function validDateParts(year: string, month: string, day: string) {
+  const parsedYear = Number(year);
+  const parsedMonth = Number(month);
+  const parsedDay = Number(day);
+  if (
+    !Number.isInteger(parsedYear) ||
+    !Number.isInteger(parsedMonth) ||
+    !Number.isInteger(parsedDay)
+  ) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(parsedYear, parsedMonth - 1, parsedDay));
+  return (
+    date.getUTCFullYear() === parsedYear &&
+    date.getUTCMonth() === parsedMonth - 1 &&
+    date.getUTCDate() === parsedDay
+  );
+}
+
+function normalizeImportText(value: string) {
+  return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, " ");
 }
 
 function todayIso() {
@@ -876,5 +1060,87 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function ResultDialog({
+  result,
+  onClose,
+}: {
+  result: ResultDialogState;
+  onClose: () => void;
+}) {
+  if (!result) return null;
+
+  const toneClass =
+    result.tone === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : result.tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-[2rem] bg-white p-6 shadow-2xl">
+        <div className={`rounded-2xl border px-4 py-3 ${toneClass}`}>
+          <h3 className="text-2xl font-black text-slate-950">
+            {result.title}
+          </h3>
+          <p className="mt-2 text-sm font-semibold leading-6">
+            {result.description}
+          </p>
+        </div>
+
+        {result.failures && result.failures.length > 0 && (
+          <div className="mt-5 min-h-0 overflow-y-auto pr-1">
+            <p className="mb-3 text-sm font-black text-slate-800">
+              Detail row yang gagal
+            </p>
+            <div className="space-y-3">
+              {result.failures.map((failure) => (
+                <div
+                  key={failure.rowNumber}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-black text-slate-950">
+                      Row {failure.rowNumber}
+                    </p>
+                    <p className="text-slate-500">
+                      {failure.candidate.nameOfCandidate || "Nama kosong"}
+                    </p>
+                  </div>
+                  <dl className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                    <div>
+                      <dt className="font-black text-slate-500">Email</dt>
+                      <dd className="break-words">
+                        {failure.candidate.email || "-"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-black text-slate-500">Position</dt>
+                      <dd className="break-words">
+                        {failure.candidate.position || "-"}
+                      </dd>
+                    </div>
+                  </dl>
+                  <ul className="mt-3 space-y-1 text-sm font-semibold text-rose-700">
+                    {failure.errors.map((item) => (
+                      <li key={item}>- {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={onClose} className="primary-button">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

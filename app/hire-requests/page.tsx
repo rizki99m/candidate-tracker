@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { InteractiveValue } from "@/components/InteractiveValue";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import {
   PageSize,
   PaginationControls,
@@ -231,7 +232,7 @@ export default function HireRequestsPage() {
 
       {loading && (
         <div className="card text-sm font-semibold text-slate-500">
-          Loading hire requests...
+          <LoadingIndicator label="Loading hire requests from database..." />
         </div>
       )}
 

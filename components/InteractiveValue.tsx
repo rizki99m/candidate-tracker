@@ -12,7 +12,7 @@ export function InteractiveValue({
   const href = getInteractiveHref(value);
   const label = truncate ? truncateText(value) : value;
 
-  if (!href) return label;
+  if (!href) return <span className={className}>{label}</span>;
 
   return (
     <a

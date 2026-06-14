@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -114,7 +115,7 @@ export default function LoginPage() {
             disabled={loading}
             className="primary-button w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Signing in..." : "Login"}
+            {loading ? <LoadingIndicator label="Signing in..." /> : "Login"}
           </button>
         </form>
       </section>

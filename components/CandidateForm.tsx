@@ -6,7 +6,6 @@ import {
   CandidateStatus,
   CandidateStatusLookup,
   Role,
-  candidateStatuses,
   todayString,
 } from "@/lib/recruitment";
 
@@ -72,7 +71,7 @@ export function CandidateForm({
     statusId: defaultStatusId,
     status: (initialCandidate?.status ||
       candidateStatusesLookup[0]?.name ||
-      "HR Interview") as CandidateStatus,
+      "") as CandidateStatus,
     hrInterviewDate: initialCandidate?.hrInterviewDate || "",
     userInterviewDate: initialCandidate?.userInterviewDate || "",
   });
@@ -411,11 +410,12 @@ export function CandidateForm({
               }));
             }}
             className="input"
+            disabled={candidateStatusesLookup.length === 0}
           >
-            {(candidateStatusesLookup.length
-              ? candidateStatusesLookup
-              : candidateStatuses.map((status) => ({ id: status, name: status }))
-            ).map((status) => (
+            {candidateStatusesLookup.length === 0 && (
+              <option value="">No status from database</option>
+            )}
+            {candidateStatusesLookup.map((status) => (
               <option key={status.id} value={status.id}>
                 {status.name}
               </option>
