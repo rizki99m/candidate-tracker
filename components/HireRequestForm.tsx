@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FormValidationDialog } from "@/components/FormValidationDialog";
 import {
   HireRequest,
   HireRequestStatus,
@@ -77,6 +78,7 @@ export function HireRequestForm({
     status: initialHireRequest?.status || hireRequestStatusesLookup[0]?.name || "",
     isUrgent: initialHireRequest?.isUrgent || false,
   });
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   function updateField(key: keyof HireRequestFormData, value: string | boolean) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -85,11 +87,14 @@ export function HireRequestForm({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    for (const field of fieldLabels) {
-      if (!String(form[field.key]).trim()) {
-        alert(`${field.label} wajib diisi.`);
-        return;
-      }
+    const errors = validateHireRequestForm(
+      form,
+      isEdit,
+      hireRequestStatusesLookup.length > 0,
+    );
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return;
     }
 
     onSubmit({
@@ -213,8 +218,53 @@ export function HireRequestForm({
       <button type="submit" className="primary-button w-full sm:w-auto">
         {submitLabel}
       </button>
+
+      <FormValidationDialog
+        open={validationErrors.length > 0}
+        title="Hire request belum bisa disimpan"
+        description="Ada input yang kurang atau formatnya belum sesuai."
+        errors={validationErrors}
+        onClose={() => setValidationErrors([])}
+      />
     </form>
   );
+}
+
+function validateHireRequestForm(
+  form: HireRequestFormData,
+  isEdit: boolean,
+  hasStatusLookup: boolean,
+) {
+  const errors: string[] = [];
+
+  for (const field of fieldLabels) {
+    if (!String(form[field.key]).trim()) {
+      errors.push(`${field.label} wajib diisi.`);
+    }
+  }
+
+  if (
+    form.teamMembersNeeded.trim() &&
+    !/^[1-9]\d*$/.test(form.teamMembersNeeded.trim())
+  ) {
+    errors.push("How many Team Member do you need? harus berupa angka lebih dari 0.");
+  }
+
+  if (!isValidDateInput(form.expectedJoinDate)) {
+    errors.push("Expected Join Date harus memakai format tanggal yang valid.");
+  }
+
+  if (isEdit && hasStatusLookup && !form.statusId) {
+    errors.push("Status wajib dipilih dari lookup database.");
+  }
+
+  return errors;
+}
+
+function isValidDateInput(value: string) {
+  if (!value) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && value === date.toISOString().slice(0, 10);
 }
 
 function Field({

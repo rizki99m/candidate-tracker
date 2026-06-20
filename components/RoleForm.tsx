@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FormValidationDialog } from "@/components/FormValidationDialog";
 import { LookupItem, Role, RoleStatus } from "@/lib/recruitment";
 
 export function RoleForm({
@@ -24,12 +25,14 @@ export function RoleForm({
     status: (initialRole?.status || roleStatusesLookup[0]?.name || "") as RoleStatus,
     notes: initialRole?.notes || "",
   });
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.name.trim()) {
-      alert("Role Name wajib diisi.");
+    const errors = validateRoleForm(form, roleStatusesLookup.length > 0);
+    if (errors.length > 0) {
+      setValidationErrors(errors);
       return;
     }
 
@@ -147,6 +150,38 @@ export function RoleForm({
       <button type="submit" className="primary-button w-full sm:w-auto">
         {submitLabel}
       </button>
+
+      <FormValidationDialog
+        open={validationErrors.length > 0}
+        title="Role belum bisa disimpan"
+        description="Ada input yang kurang atau formatnya belum sesuai."
+        errors={validationErrors}
+        onClose={() => setValidationErrors([])}
+      />
     </form>
   );
+}
+
+function validateRoleForm(
+  form: {
+    name: string;
+    department: string;
+    level: string;
+    statusId: string;
+    status: RoleStatus;
+    notes: string;
+  },
+  hasStatusLookup: boolean,
+) {
+  const errors: string[] = [];
+
+  if (!form.name.trim()) {
+    errors.push("Role Name wajib diisi, contoh: Art Director.");
+  }
+
+  if (hasStatusLookup && !form.statusId) {
+    errors.push("Status wajib dipilih dari lookup database.");
+  }
+
+  return errors;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FormValidationDialog } from "@/components/FormValidationDialog";
 import {
   Candidate,
   CandidateStatus,
@@ -75,6 +76,7 @@ export function CandidateForm({
     hrInterviewDate: initialCandidate?.hrInterviewDate || "",
     userInterviewDate: initialCandidate?.userInterviewDate || "",
   });
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   function updateField<K extends keyof CandidateFormData>(
     key: K,
@@ -105,13 +107,9 @@ export function CandidateForm({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.nameOfCandidate.trim()) {
-      alert("Name of Candidate wajib diisi.");
-      return;
-    }
-
-    if (!form.position.trim()) {
-      alert("Position wajib diisi.");
+    const errors = validateCandidateForm(form, candidateStatusesLookup.length > 0);
+    if (errors.length > 0) {
+      setValidationErrors(errors);
       return;
     }
 
@@ -462,8 +460,86 @@ export function CandidateForm({
       <button type="submit" className="primary-button w-full sm:w-auto">
         {submitLabel}
       </button>
+
+      <FormValidationDialog
+        open={validationErrors.length > 0}
+        title="Candidate belum bisa disimpan"
+        description="Ada input yang kurang atau formatnya belum sesuai."
+        errors={validationErrors}
+        onClose={() => setValidationErrors([])}
+      />
     </form>
   );
+}
+
+function validateCandidateForm(
+  form: CandidateFormData,
+  hasStatusLookup: boolean,
+) {
+  const errors: string[] = [];
+
+  if (!form.nameOfCandidate.trim()) {
+    errors.push("Name wajib diisi dengan nama lengkap kandidat.");
+  }
+
+  if (!form.position.trim()) {
+    errors.push("Position wajib diisi dengan posisi yang dilamar.");
+  }
+
+  if (form.email.trim() && !isValidEmail(form.email.trim())) {
+    errors.push("Email harus memakai format yang valid, contoh: nama@domain.com.");
+  }
+
+  if (form.phoneNumber.trim() && !isValidPhoneNumber(form.phoneNumber.trim())) {
+    errors.push("No. HP hanya boleh berisi angka, spasi, +, -, atau tanda kurung, minimal 8 digit.");
+  }
+
+  if (form.gpa.trim() && !isValidGpa(form.gpa.trim())) {
+    errors.push("IPK / GPA harus berupa angka antara 0 sampai 4, contoh: 3.75.");
+  }
+
+  if (!form.poolDate) {
+    errors.push("Pool Date wajib diisi.");
+  }
+
+  if (!isValidDateInput(form.poolDate)) {
+    errors.push("Pool Date harus memakai format tanggal yang valid.");
+  }
+
+  if (form.hrInterviewDate && !isValidDateInput(form.hrInterviewDate)) {
+    errors.push("HR Interview Date harus memakai format tanggal yang valid.");
+  }
+
+  if (form.userInterviewDate && !isValidDateInput(form.userInterviewDate)) {
+    errors.push("User Interview Date harus memakai format tanggal yang valid.");
+  }
+
+  if (hasStatusLookup && !form.statusId) {
+    errors.push("Status wajib dipilih dari lookup database.");
+  }
+
+  return errors;
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 8 && /^[\d\s()+-]+$/.test(value);
+}
+
+function isValidGpa(value: string) {
+  const normalized = value.replace(",", ".");
+  const gpa = Number(normalized);
+  return Number.isFinite(gpa) && gpa >= 0 && gpa <= 4;
+}
+
+function isValidDateInput(value: string) {
+  if (!value) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && value === date.toISOString().slice(0, 10);
 }
 
 function FormSection({

@@ -45,6 +45,10 @@ const candidateColumns: { key: SearchColumn; label: string }[] = [
   { key: "cvLink", label: "CV" },
 ];
 
+const advancedSearchColumns: { key: SearchColumn; label: string }[] = [
+  { key: "nameOfCandidate", label: "Nama Lengkap" },
+];
+
 const candidateDetailColumns: { key: SearchColumn; label: string }[] = [
   ...candidateColumns,
   { key: "department", label: "Departemen" },
@@ -66,7 +70,7 @@ const candidateDetailColumns: { key: SearchColumn; label: string }[] = [
 ];
 
 const emptySearchFilters = Object.fromEntries(
-  candidateColumns.map((column) => [column.key, ""]),
+  advancedSearchColumns.map((column) => [column.key, ""]),
 ) as Record<SearchColumn, string>;
 
 type ImportFailure = {
@@ -370,7 +374,7 @@ export default function CandidatesPage() {
         {searchOpen && (
           <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {tableColumns.map((column) => (
+              {advancedSearchColumns.map((column) => (
                 <Field key={column.key} label={column.label}>
                   <input
                     value={searchFilters[column.key]}
