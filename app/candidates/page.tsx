@@ -837,11 +837,7 @@ function buildImportedCandidate(
   | "statusColorHex"
 > {
   const roleText = getImportValue(row, ["role_applied", "role", "roleid"]);
-  const role = roles.find(
-    (item) =>
-      item.id === roleText ||
-      item.name.toLowerCase() === roleText.toLowerCase(),
-  );
+  const role = findRoleLookup(roles, roleText);
   const statusFromDateColumn = findStatusLookup(
     statuses,
     getImportValue(row, ["hr_interview_date", "user_interview_date"]),
@@ -904,6 +900,19 @@ function buildImportedCandidate(
     hrInterviewDate,
     userInterviewDate,
   };
+}
+
+function findRoleLookup(roles: Role[], value: string) {
+  const trimmed = value.trim();
+  const normalized = normalizeImportText(value);
+  if (!trimmed && !normalized) return undefined;
+
+  return roles.find(
+    (item) =>
+      item.id === trimmed ||
+      item.name.trim().toLowerCase() === trimmed.toLowerCase() ||
+      normalizeImportText(item.name) === normalized,
+  );
 }
 
 function findStatusLookup(statuses: CandidateStatusLookup[], value: string) {

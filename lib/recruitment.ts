@@ -129,7 +129,11 @@ export const hireRequestStatuses: HireRequestStatus[] = [
 export const roleStatuses: RoleStatus[] = ["Active", "Closed"];
 
 export function todayString() {
-  return new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
