@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { InteractiveValue } from "@/components/InteractiveValue";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
-import {
-  PageSize,
-  PaginationControls,
-} from "@/components/PaginationControls";
+import { PageSize, PaginationControls } from "@/components/PaginationControls";
 import {
   Candidate,
   CandidateStatusLookup,
@@ -86,6 +83,11 @@ type ResultDialogState = {
   failures?: ImportFailure[];
 } | null;
 
+type DuplicateCandidate = Candidate & {
+  duplicateFields: string[];
+  duplicateCandidateIds: string[];
+};
+
 export default function CandidatesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -99,6 +101,12 @@ export default function CandidatesPage() {
   const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(
     null,
   );
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>(
+    [],
+  );
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -151,8 +159,7 @@ export default function CandidatesPage() {
         ? candidateColumns
         : candidateColumns.filter(
             (column) =>
-              column.key !== "currentSalary" &&
-              column.key !== "expectedSalary",
+              column.key !== "currentSalary" && column.key !== "expectedSalary",
           ),
     [showSalary],
   );
@@ -162,14 +169,17 @@ export default function CandidatesPage() {
         ? candidateDetailColumns
         : candidateDetailColumns.filter(
             (column) =>
-              column.key !== "currentSalary" &&
-              column.key !== "expectedSalary",
+              column.key !== "currentSalary" && column.key !== "expectedSalary",
           ),
     [showSalary],
   );
   const searchableColumns = useMemo(
     () => (showSalary ? candidateColumns : tableColumns),
     [showSalary, tableColumns],
+  );
+  const duplicateCandidates = useMemo(
+    () => findDuplicateCandidates(candidates),
+    [candidates],
   );
 
   const filteredCandidates = useMemo(() => {
@@ -219,6 +229,12 @@ export default function CandidatesPage() {
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
+  const selectedPageCandidateIds = paginatedCandidates
+    .filter((candidate) => selectedCandidateIds.includes(candidate.id))
+    .map((candidate) => candidate.id);
+  const allPageCandidatesSelected =
+    paginatedCandidates.length > 0 &&
+    selectedPageCandidateIds.length === paginatedCandidates.length;
 
   useEffect(() => {
     queueMicrotask(() => setPage(1));
@@ -244,6 +260,9 @@ export default function CandidatesPage() {
       setCandidates((current) =>
         current.filter((candidate) => candidate.id !== selectedCandidate.id),
       );
+      setSelectedCandidateIds((current) =>
+        current.filter((id) => id !== selectedCandidate.id),
+      );
       setSelectedCandidate(null);
       setResultDialog({
         title: "Data berhasil dihapus",
@@ -257,6 +276,63 @@ export default function CandidatesPage() {
           err instanceof Error ? err.message : "Gagal menghapus kandidat.",
         tone: "error",
       });
+    }
+  }
+
+  function toggleCandidateSelection(id: string) {
+    setSelectedCandidateIds((current) =>
+      current.includes(id)
+        ? current.filter((candidateId) => candidateId !== id)
+        : [...current, id],
+    );
+  }
+
+  function toggleCurrentPageSelection() {
+    const pageIds = paginatedCandidates.map((candidate) => candidate.id);
+    setSelectedCandidateIds((current) => {
+      if (allPageCandidatesSelected) {
+        return current.filter((id) => !pageIds.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...pageIds]));
+    });
+  }
+
+  async function deleteSelectedCandidates() {
+    const idsToDelete = [...selectedCandidateIds];
+    if (idsToDelete.length === 0) return;
+
+    setBulkDeleting(true);
+    try {
+      const results = await Promise.allSettled(
+        idsToDelete.map((id) => deleteCandidateRequest(id)),
+      );
+      const deletedIds = idsToDelete.filter(
+        (_, index) => results[index].status === "fulfilled",
+      );
+      const failedCount = idsToDelete.length - deletedIds.length;
+
+      if (deletedIds.length > 0) {
+        setCandidates((current) =>
+          current.filter((candidate) => !deletedIds.includes(candidate.id)),
+        );
+      }
+      setSelectedCandidateIds((current) =>
+        current.filter((id) => !deletedIds.includes(id)),
+      );
+      setBulkDeleteOpen(false);
+
+      setResultDialog({
+        title: failedCount
+          ? "Penghapusan selesai dengan catatan"
+          : "Data berhasil dihapus",
+        description: failedCount
+          ? `${deletedIds.length} kandidat berhasil dihapus, ${failedCount} kandidat gagal dihapus.`
+          : `${deletedIds.length} kandidat berhasil dihapus dari database.`,
+        tone: failedCount ? "warning" : "success",
+      });
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -329,7 +405,8 @@ export default function CandidatesPage() {
     } catch (err) {
       setResultDialog({
         title: "Import gagal",
-        description: err instanceof Error ? err.message : "Gagal import kandidat.",
+        description:
+          err instanceof Error ? err.message : "Gagal import kandidat.",
         tone: "error",
       });
     } finally {
@@ -346,6 +423,22 @@ export default function CandidatesPage() {
               <Link href="/candidates/new" className="primary-button">
                 Add Candidate
               </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setDuplicateDialogOpen(true)}
+              className="secondary-button"
+            >
+              Cek Duplikat ({duplicateCandidates.length})
+            </button>
+            {canManage && selectedCandidateIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkDeleteOpen(true)}
+                className="danger-button"
+              >
+                Delete Selected ({selectedCandidateIds.length})
+              </button>
             )}
           </div>
 
@@ -443,86 +536,122 @@ export default function CandidatesPage() {
         </div>
       )}
 
-      {!loading && <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
-        <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
-          <colgroup>
-            <col className="w-16" />
-            {tableColumns.map((column) => (
-              <col key={column.key} className="w-[10rem]" />
-            ))}
-            <col className="w-[18rem]" />
-          </colgroup>
-          <thead className="bg-slate-950 text-white">
-            <tr>
-              <th className="px-4 py-3">No</th>
+      {!loading && (
+        <div className="hidden max-w-full overflow-x-auto rounded-[2rem] border border-white bg-white shadow-sm lg:block">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
+            <colgroup>
+              {canManage && <col className="w-12" />}
+              <col className="w-16" />
               {tableColumns.map((column) => (
-                <th key={column.key} className="px-4 py-3">
-                  {column.label}
-                </th>
+                <col key={column.key} className="w-[10rem]" />
               ))}
-              <th className="px-4 py-3 text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {paginatedCandidates.map((candidate, index) => (
-              <tr key={candidate.id} className="align-top">
-                <td className="px-4 py-4 text-xs text-slate-500">
-                  {(currentPage - 1) * pageSize + index + 1}
-                </td>
-                {tableColumns.map((column) => (
-                  <td
-                    key={column.key}
-                    className="min-w-0 overflow-hidden px-4 py-4 text-slate-600"
-                  >
-                    {renderCandidateValue(candidate, roles, column.key)}
-                  </td>
-                ))}
-                <td className="px-4 py-4">
-                  <div className="flex min-w-max justify-end gap-2">
-                    <button
-                      onClick={() => setDetailCandidate(candidate)}
-                      className="secondary-button px-3 py-2 text-xs"
-                    >
-                      Detail
-                    </button>
-                    {canManage && (
-                      <>
-                        <Link
-                          href={`/candidates/${candidate.id}/edit`}
-                          className="secondary-button px-3 py-2 text-xs"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          onClick={() => setSelectedCandidate(candidate)}
-                          className="danger-button px-3 py-2 text-xs"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-
-            {filteredCandidates.length === 0 && (
+              <col className="w-[18rem]" />
+            </colgroup>
+            <thead className="bg-slate-950 text-white">
               <tr>
-                <td
-                  colSpan={tableColumns.length + 2}
-                  className="px-4 py-8 text-center text-slate-500"
-                >
-                  Belum ada kandidat.
-                </td>
+                {canManage && (
+                  <th className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={allPageCandidatesSelected}
+                      onChange={toggleCurrentPageSelection}
+                      aria-label="Pilih semua kandidat pada halaman ini"
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                  </th>
+                )}
+                <th className="px-4 py-3">No</th>
+                {tableColumns.map((column) => (
+                  <th key={column.key} className="px-4 py-3">
+                    {column.label}
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-right">Action</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>}
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {paginatedCandidates.map((candidate, index) => (
+                <tr key={candidate.id} className="align-top">
+                  {canManage && (
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidateIds.includes(candidate.id)}
+                        onChange={() => toggleCandidateSelection(candidate.id)}
+                        aria-label={`Pilih ${candidate.nameOfCandidate}`}
+                        className="h-4 w-4 accent-emerald-600"
+                      />
+                    </td>
+                  )}
+                  <td className="px-4 py-4 text-xs text-slate-500">
+                    {(currentPage - 1) * pageSize + index + 1}
+                  </td>
+                  {tableColumns.map((column) => (
+                    <td
+                      key={column.key}
+                      className="min-w-0 overflow-hidden px-4 py-4 text-slate-600"
+                    >
+                      {renderCandidateValue(candidate, roles, column.key)}
+                    </td>
+                  ))}
+                  <td className="px-4 py-4">
+                    <div className="flex min-w-max justify-end gap-2">
+                      <button
+                        onClick={() => setDetailCandidate(candidate)}
+                        className="secondary-button px-3 py-2 text-xs"
+                      >
+                        Detail
+                      </button>
+                      {canManage && (
+                        <>
+                          <Link
+                            href={`/candidates/${candidate.id}/edit`}
+                            className="secondary-button px-3 py-2 text-xs"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            onClick={() => setSelectedCandidate(candidate)}
+                            className="danger-button px-3 py-2 text-xs"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {filteredCandidates.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={tableColumns.length + (canManage ? 3 : 2)}
+                    className="px-4 py-8 text-center text-slate-500"
+                  >
+                    Belum ada kandidat.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="space-y-3 lg:hidden">
         {paginatedCandidates.map((candidate) => (
           <div key={candidate.id} className="card">
+            {canManage && (
+              <label className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={selectedCandidateIds.includes(candidate.id)}
+                  onChange={() => toggleCandidateSelection(candidate.id)}
+                  className="h-4 w-4 accent-emerald-600"
+                />
+                Pilih kandidat
+              </label>
+            )}
             <p className="text-lg font-black">
               <InteractiveValue value={candidate.nameOfCandidate} />
             </p>
@@ -542,10 +671,10 @@ export default function CandidatesPage() {
 
             <div className="mt-4 space-y-2 text-sm text-slate-600">
               <p>Email: {renderCandidateValue(candidate, roles, "email")}</p>
-              <p>No. HP: {renderCandidateValue(candidate, roles, "phoneNumber")}</p>
               <p>
-                CV: {renderCandidateValue(candidate, roles, "cvLink")}
+                No. HP: {renderCandidateValue(candidate, roles, "phoneNumber")}
               </p>
+              <p>CV: {renderCandidateValue(candidate, roles, "cvLink")}</p>
             </div>
 
             <div
@@ -591,7 +720,11 @@ export default function CandidatesPage() {
       <div className="flex flex-wrap justify-end gap-2">
         {canImportCandidates(user?.role) && (
           <label className="secondary-button cursor-pointer">
-            {importing ? <LoadingIndicator label="Importing..." /> : "Import CSV"}
+            {importing ? (
+              <LoadingIndicator label="Importing..." />
+            ) : (
+              "Import CSV"
+            )}
             <input
               type="file"
               accept=".csv,text/csv"
@@ -608,7 +741,11 @@ export default function CandidatesPage() {
             disabled={exporting}
             className="secondary-button disabled:opacity-60"
           >
-            {exporting ? <LoadingIndicator label="Exporting..." /> : "Export to Excel"}
+            {exporting ? (
+              <LoadingIndicator label="Exporting..." />
+            ) : (
+              "Export to Excel"
+            )}
           </button>
         )}
       </div>
@@ -620,6 +757,28 @@ export default function CandidatesPage() {
         confirmText="Delete Candidate"
         onClose={() => setSelectedCandidate(null)}
         onConfirm={deleteCandidate}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title="Delete selected candidates?"
+        description={`${selectedCandidateIds.length} kandidat yang dipilih akan dihapus. Action ini tidak bisa dibatalkan.`}
+        confirmText={bulkDeleting ? "Deleting..." : "Delete Selected"}
+        onClose={() => {
+          if (!bulkDeleting) setBulkDeleteOpen(false);
+        }}
+        onConfirm={deleteSelectedCandidates}
+      />
+
+      <DuplicateCandidatesDialog
+        open={duplicateDialogOpen}
+        candidates={duplicateCandidates}
+        canManage={canManage}
+        onClose={() => setDuplicateDialogOpen(false)}
+        onDelete={(candidate) => {
+          setDuplicateDialogOpen(false);
+          setSelectedCandidate(candidate);
+        }}
       />
 
       <CandidateDetailDialog
@@ -694,6 +853,257 @@ function CandidateDetailDialog({
       </div>
     </div>
   );
+}
+
+function DuplicateCandidatesDialog({
+  open,
+  candidates,
+  canManage,
+  onClose,
+  onDelete,
+}: {
+  open: boolean;
+  candidates: DuplicateCandidate[];
+  canManage: boolean;
+  onClose: () => void;
+  onDelete: (candidate: Candidate) => void;
+}) {
+  const [expandedCandidateIds, setExpandedCandidateIds] = useState<string[]>(
+    [],
+  );
+
+  function toggleDetail(candidateId: string) {
+    setExpandedCandidateIds((current) =>
+      current.includes(candidateId)
+        ? current.filter((id) => id !== candidateId)
+        : [...current, candidateId],
+    );
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-7xl flex-col rounded-[2rem] bg-white p-6 shadow-2xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-2xl font-black text-slate-950">
+              Kandidat Duplikat
+            </h3>
+          </div>
+          <button type="button" onClick={onClose} className="secondary-button">
+            Close
+          </button>
+        </div>
+
+        <div className="mt-6 min-h-0 overflow-auto rounded-2xl border border-slate-200">
+          <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-sm">
+            <colgroup>
+              <col className="w-16" />
+              <col className="w-[13rem]" />
+              <col className="w-[14rem]" />
+              <col className="w-[10rem]" />
+              <col className="w-[16rem]" />
+            </colgroup>
+            <thead className="sticky top-0 bg-slate-950 text-white">
+              <tr>
+                <th className="px-4 py-3">No</th>
+                <th className="px-4 py-3">Nama Lengkap</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">No. HP</th>
+                <th className="px-4 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {candidates.map((candidate, index) => {
+                const expanded = expandedCandidateIds.includes(candidate.id);
+                const duplicateEntries = [
+                  candidate,
+                  ...candidates.filter((item) =>
+                    candidate.duplicateCandidateIds.includes(item.id),
+                  ),
+                ];
+
+                return (
+                  <Fragment key={candidate.id}>
+                    <tr className="align-top">
+                      <td className="px-4 py-4 text-xs text-slate-500">
+                        {index + 1}
+                      </td>
+                      <td className="px-4 py-4 text-slate-600">
+                        <InteractiveValue value={candidate.nameOfCandidate} />
+                      </td>
+                      <td className="px-4 py-4 text-slate-600">
+                        <InteractiveValue value={candidate.email} />
+                      </td>
+                      <td className="px-4 py-4 text-slate-600">
+                        <InteractiveValue value={candidate.phoneNumber} />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => toggleDetail(candidate.id)}
+                          aria-expanded={expanded}
+                          className="secondary-button px-3 py-2 text-xs"
+                        >
+                          {expanded ? "Tutup Detail" : "Detail"}
+                        </button>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={5} className="px-4 py-4">
+                          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                            <table className="w-full min-w-[720px] text-left text-sm">
+                              <thead className="bg-slate-100 text-slate-700">
+                                <tr>
+                                  <th className="px-4 py-3">Nama Lengkap</th>
+                                  <th className="px-4 py-3">
+                                    Posisi yang Dilamar
+                                  </th>
+                                  <th className="px-4 py-3">Status</th>
+                                  {canManage && (
+                                    <th className="px-4 py-3 text-right">
+                                      Action
+                                    </th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {duplicateEntries.map((relatedCandidate) => (
+                                  <tr key={relatedCandidate.id}>
+                                    <td className="px-4 py-3 text-slate-600">
+                                      <InteractiveValue
+                                        value={relatedCandidate.nameOfCandidate}
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-600">
+                                      <InteractiveValue
+                                        value={relatedCandidate.position}
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      {renderCandidateValue(
+                                        relatedCandidate,
+                                        [],
+                                        "status",
+                                      )}
+                                    </td>
+                                    {canManage && (
+                                      <td className="px-4 py-3">
+                                        <div className="flex justify-end gap-2">
+                                          <Link
+                                            href={`/candidates/${relatedCandidate.id}/edit`}
+                                            className="secondary-button px-3 py-2 text-xs"
+                                          >
+                                            Edit
+                                          </Link>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              onDelete(relatedCandidate)
+                                            }
+                                            className="danger-button px-3 py-2 text-xs"
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+              {candidates.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-8 text-center text-slate-500"
+                  >
+                    Tidak ada kandidat duplikat.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function findDuplicateCandidates(
+  candidates: Candidate[],
+): DuplicateCandidate[] {
+  const fields = [
+    {
+      key: "nameOfCandidate",
+      label: "Nama Lengkap",
+      normalize: normalizeDuplicateText,
+    },
+    { key: "email", label: "Email", normalize: normalizeDuplicateText },
+    { key: "phoneNumber", label: "No. HP", normalize: normalizePhoneNumber },
+  ] as const;
+  const duplicateIds = new Map<string, string[]>();
+  const duplicateCandidateIds = new Map<string, Set<string>>();
+
+  for (const field of fields) {
+    const values = new Map<string, Candidate[]>();
+    for (const candidate of candidates) {
+      const value = field.normalize(candidate[field.key]);
+      if (!value) continue;
+      values.set(value, [...(values.get(value) || []), candidate]);
+    }
+
+    for (const matches of values.values()) {
+      if (matches.length < 2) continue;
+      for (const candidate of matches) {
+        duplicateIds.set(candidate.id, [
+          ...(duplicateIds.get(candidate.id) || []),
+          field.label,
+        ]);
+        duplicateCandidateIds.set(
+          candidate.id,
+          new Set([
+            ...(duplicateCandidateIds.get(candidate.id) || []),
+            ...matches
+              .filter((item) => item.id !== candidate.id)
+              .map((item) => item.id),
+          ]),
+        );
+      }
+    }
+  }
+
+  return candidates.flatMap((candidate) => {
+    const duplicateFields = duplicateIds.get(candidate.id);
+    return duplicateFields
+      ? [
+          {
+            ...candidate,
+            duplicateFields,
+            duplicateCandidateIds: Array.from(
+              duplicateCandidateIds.get(candidate.id) || [],
+            ),
+          },
+        ]
+      : [];
+  });
+}
+
+function normalizeDuplicateText(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizePhoneNumber(value: string) {
+  return value.replace(/\D/g, "");
 }
 
 function candidateSearchValue(
@@ -873,8 +1283,9 @@ function buildImportedCandidate(
       "",
     source: getImportValue(row, ["source", "sumber"]),
     poolDate:
-      normalizeImportDate(getImportValue(row, ["pool_date", "tanggal_masuk"])) ||
-      todayIso(),
+      normalizeImportDate(
+        getImportValue(row, ["pool_date", "tanggal_masuk"]),
+      ) || todayIso(),
     education: getImportValue(row, ["education", "pendidikan"]),
     university: getImportValue(row, ["university", "universitas"]),
     major: getImportValue(row, ["major", "jurusan"]),
@@ -887,14 +1298,17 @@ function buildImportedCandidate(
       getImportValue(row, ["expected_salary", "expected", "excpected_salary"]),
     ),
     linkedInProfile: getImportValue(row, ["linkedin", "linked_in_profile"]),
-    summaryInterviewHr: getImportValue(row, ["summary_hr", "summary_interview_hr"]),
+    summaryInterviewHr: getImportValue(row, [
+      "summary_hr",
+      "summary_interview_hr",
+    ]),
     cvLink: getImportValue(row, ["cv", "resume", "cv_link"]),
     portfolioLink: getImportValue(row, ["portfolio", "portfolio_link"]),
-    psychologicalTest: getImportValue(row, [
-      "psychological_test",
-      "psikotes",
+    psychologicalTest: getImportValue(row, ["psychological_test", "psikotes"]),
+    feedbackFromUser: getImportValue(row, [
+      "summary_user",
+      "feedback_from_user",
     ]),
-    feedbackFromUser: getImportValue(row, ["summary_user", "feedback_from_user"]),
     statusId: status?.id || "",
     status: status?.name || statusText,
     hrInterviewDate,
@@ -987,7 +1401,11 @@ function getImportValue(row: Record<string, string>, keys: string[]) {
 }
 
 function normalizeHeader(value: string) {
-  return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "_").replaceAll(/^_|_$/g, "");
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "_")
+    .replaceAll(/^_|_$/g, "");
 }
 
 function normalizeRupiah(value: string) {
@@ -1043,7 +1461,10 @@ function validDateParts(year: string, month: string, day: string) {
 }
 
 function normalizeImportText(value: string) {
-  return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, " ");
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, " ");
 }
 
 function todayIso() {
@@ -1096,9 +1517,7 @@ function ResultDialog({
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
       <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-[2rem] bg-white p-6 shadow-2xl">
         <div className={`rounded-2xl border px-4 py-3 ${toneClass}`}>
-          <h3 className="text-2xl font-black text-slate-950">
-            {result.title}
-          </h3>
+          <h3 className="text-2xl font-black text-slate-950">{result.title}</h3>
           <p className="mt-2 text-sm font-semibold leading-6">
             {result.description}
           </p>
