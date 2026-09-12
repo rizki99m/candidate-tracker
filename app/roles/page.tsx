@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 import { InteractiveValue } from "@/components/InteractiveValue";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
 import {
@@ -37,6 +38,7 @@ export default function RolesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -112,12 +114,15 @@ export default function RolesPage() {
   async function deleteRole() {
     if (!selectedRole) return;
 
+    setDeleting(true);
     try {
       await deleteRoleRequest(selectedRole.id);
       setRoles((current) => current.filter((role) => role.id !== selectedRole.id));
       setSelectedRole(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Gagal menghapus role.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -342,6 +347,10 @@ export default function RolesPage() {
         confirmText="Delete Role"
         onClose={() => setSelectedRole(null)}
         onConfirm={deleteRole}
+      />
+      <BlockingLoadingOverlay
+        open={loading || deleting}
+        label={deleting ? "Menghapus role..." : "Memuat data role..."}
       />
 
       <RoleDetailDialog role={detailRole} onClose={() => setDetailRole(null)} />

@@ -2,25 +2,29 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 import { InteractiveValue } from "@/components/InteractiveValue";
-import {
-  PageSize,
-  PaginationControls,
-} from "@/components/PaginationControls";
+import { PageSize, PaginationControls } from "@/components/PaginationControls";
 import {
   Candidate,
   CandidateStatusLookup,
   DateFilter,
   Role,
+  deleteCandidate as deleteCandidateRequest,
   fetchCandidates,
   fetchLookups,
   fetchRoles,
   filterCandidates,
   getRoleName,
-  statusClass,
   statusColor,
 } from "@/lib/recruitment";
-import { SessionUser, canAddCandidate, canSeeSalary } from "@/lib/permissions";
+import {
+  SessionUser,
+  canAddCandidate,
+  canManageData,
+  canSeeSalary,
+} from "@/lib/permissions";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
 
 type SearchColumn =
@@ -34,7 +38,7 @@ type SearchColumn =
 type DashboardData = {
   totals: {
     totalCandidates: number;
-    totalTalentPool: number;
+    totalWithoutRole: number;
     totalHired: number;
     totalRejected: number;
     totalInProcess: number;
@@ -53,6 +57,9 @@ export default function DashboardPage() {
   const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(
     null,
   );
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(
+    null,
+  );
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -66,6 +73,7 @@ export default function DashboardPage() {
   const [latestPageSize, setLatestPageSize] = useState<PageSize>(10);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -88,7 +96,9 @@ export default function DashboardPage() {
         setCandidateStatusesLookup(lookups.candidateStatuses);
         setDashboard(dashboardResponse);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Gagal memuat dashboard.");
+        setError(
+          err instanceof Error ? err.message : "Gagal memuat dashboard.",
+        );
       } finally {
         setLoading(false);
       }
@@ -147,20 +157,22 @@ export default function DashboardPage() {
     searchQuery,
   ]);
 
-  const totalCandidates = dashboard?.totals.totalCandidates ?? filteredCandidates.length;
-  const totalTalentPool =
-    dashboard?.totals.totalTalentPool ??
-    filteredCandidates.filter((candidate) => !candidate.roleId).length;
-  const totalInProcess = dashboard?.totals.totalInProcess ?? filteredCandidates.filter(
-    (candidate) =>
-      !["Hired", "Rejected", "Withdraw"].includes(candidate.status),
-  ).length;
-  const totalHired = dashboard?.totals.totalHired ?? filteredCandidates.filter(
-    (candidate) => candidate.status === "Hired",
-  ).length;
-  const totalRejected = dashboard?.totals.totalRejected ?? filteredCandidates.filter(
-    (candidate) => candidate.status === "Rejected",
-  ).length;
+  const totalCandidates =
+    dashboard?.totals.totalCandidates ?? filteredCandidates.length;
+  const totalInProcess =
+    dashboard?.totals.totalInProcess ??
+    filteredCandidates.filter(
+      (candidate) =>
+        !["Hired", "Rejected", "Withdraw"].includes(candidate.status),
+    ).length;
+  const totalHired =
+    dashboard?.totals.totalHired ??
+    filteredCandidates.filter((candidate) => candidate.status === "Hired")
+      .length;
+  const totalRejected =
+    dashboard?.totals.totalRejected ??
+    filteredCandidates.filter((candidate) => candidate.status === "Rejected")
+      .length;
   const statusSummary = dashboard?.byStatus.length
     ? dashboard.byStatus.map((item) => ({
         status: item.statusName,
@@ -170,7 +182,8 @@ export default function DashboardPage() {
         status: status.name,
         count: statusDistributionCandidates.filter(
           (candidate) =>
-            candidate.statusId === status.id || candidate.status === status.name,
+            candidate.statusId === status.id ||
+            candidate.status === status.name,
         ).length,
       }));
 
@@ -181,8 +194,9 @@ export default function DashboardPage() {
       }))
     : [
         {
-          label: "Talent Pool",
-          count: filteredCandidates.filter((candidate) => !candidate.roleId).length,
+          label: "Belum ada role",
+          count: filteredCandidates.filter((candidate) => !candidate.roleId)
+            .length,
         },
         ...roles.map((role) => ({
           label: role.name,
@@ -193,6 +207,7 @@ export default function DashboardPage() {
       ];
 
   const showSalary = canSeeSalary(user?.role);
+  const canManage = canManageData(user?.role);
 
   const currentLatestPage = Math.min(
     latestPage,
@@ -233,6 +248,26 @@ export default function DashboardPage() {
     }
 
     setStatusFilter(status);
+  }
+
+  async function deleteCandidate() {
+    if (!selectedCandidate) return;
+
+    setDeleting(true);
+    try {
+      await deleteCandidateRequest(selectedCandidate.id);
+      setCandidates((current) =>
+        current.filter((candidate) => candidate.id !== selectedCandidate.id),
+      );
+      setDashboard(null);
+      setSelectedCandidate(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Gagal menghapus kandidat.",
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -333,7 +368,7 @@ export default function DashboardPage() {
                   className="input"
                 >
                   <option value="all">All Roles</option>
-                  <option value="talent-pool">Talent Pool</option>
+                  <option value="without-role">Belum ada role</option>
                   {roles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
@@ -388,22 +423,18 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Total Candidates" value={totalCandidates} />
-        <MetricCard label="Talent Pool" value={totalTalentPool} />
         <MetricCard label="In Process" value={totalInProcess} />
         <MetricCard label="Hired" value={totalHired} />
         <MetricCard label="Rejected" value={totalRejected} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="card">
+      <div className="grid min-h-0 items-stretch gap-6 lg:grid-cols-2">
+        <div className="card flex h-[36rem] min-h-0 flex-col overflow-hidden">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <h3 className="text-xl font-black">Status Distribution</h3>
-              <p className="text-sm text-slate-500">
-                Pie chart status kandidat
-              </p>
             </div>
           </div>
 
@@ -416,20 +447,21 @@ export default function DashboardPage() {
               )
                 ? (candidateStatusesLookup.find(
                     (status) =>
-                      status.id === statusFilter || status.name === statusFilter,
+                      status.id === statusFilter ||
+                      status.name === statusFilter,
                   )?.name as Candidate["status"])
                 : null
             }
             onStatusClick={toggleStatusFilter}
           />
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="mt-6 min-h-0 flex-1 grid gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
             {statusSummary.map((item) => (
               <button
                 key={item.status}
                 type="button"
                 onClick={() => toggleStatusFilter(item.status)}
-              className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-left transition ${
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-left transition ${
                   statusFilter === item.status
                     ? "border-slate-950 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] ring-2 ring-slate-950"
                     : statusFilter !== "all"
@@ -441,19 +473,16 @@ export default function DashboardPage() {
                   className="h-3 w-3 rounded-full"
                   style={{ background: statusColor(item.status) }}
                 />
-                <span className="text-sm font-semibold">
-                  {item.status}
-                </span>
+                <span className="text-sm font-semibold">{item.status}</span>
                 <span className="ml-auto text-sm font-black">{item.count}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="card flex h-[28rem] flex-col">
+        <div className="card flex h-[36rem] min-h-0 flex-col overflow-hidden">
           <div className="mb-5 shrink-0">
             <h3 className="text-xl font-black">Candidates by Role</h3>
-            <p className="text-sm text-slate-500">Bar chart berdasarkan role</p>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-2">
@@ -492,7 +521,7 @@ export default function DashboardPage() {
                 <th className="px-4 py-3">Nama</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">No. HP</th>
-                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Role yang Dilamar</th>
                 <th className="px-4 py-3">Posisi yang Dilamar</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">CV</th>
@@ -523,9 +552,8 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-4 py-4">
                     <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
-                        candidate.status,
-                      )}`}
+                      className="inline-flex rounded-full border px-3 py-1 text-xs font-black text-white"
+                      style={candidateStatusStyle(candidate)}
                     >
                       {candidate.status}
                     </span>
@@ -534,7 +562,7 @@ export default function DashboardPage() {
                     <InteractiveValue value={candidate.cvLink} />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex justify-end">
+                    <div className="flex min-w-max justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setDetailCandidate(candidate)}
@@ -542,6 +570,23 @@ export default function DashboardPage() {
                       >
                         Detail
                       </button>
+                      {canManage && (
+                        <>
+                          <Link
+                            href={`/candidates/${candidate.id}/edit`}
+                            className="secondary-button px-3 py-2 text-xs"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCandidate(candidate)}
+                            className="danger-button px-3 py-2 text-xs"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -561,29 +606,53 @@ export default function DashboardPage() {
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 <InteractiveValue value={candidate.position} /> /{" "}
-                <InteractiveValue value={getRoleName(roles, candidate.roleId)} />
+                <InteractiveValue
+                  value={getRoleName(roles, candidate.roleId)}
+                />
               </p>
               <p className="mt-2 text-sm text-slate-600">
                 <InteractiveValue value={candidate.email} /> /{" "}
                 <InteractiveValue value={candidate.phoneNumber} />
               </p>
               <span
-                className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black ${statusClass(
-                  candidate.status,
-                )}`}
+                className="mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black text-white"
+                style={candidateStatusStyle(candidate)}
               >
                 {candidate.status}
               </span>
               <p className="mt-3 text-sm text-slate-600">
                 CV: <InteractiveValue value={candidate.cvLink} />
               </p>
-              <button
-                type="button"
-                onClick={() => setDetailCandidate(candidate)}
-                className="secondary-button mt-4 w-full text-sm"
+              <div
+                className={`mt-4 grid gap-2 ${
+                  canManage ? "grid-cols-3" : "grid-cols-1"
+                }`}
               >
-                Detail
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailCandidate(candidate)}
+                  className="secondary-button text-sm"
+                >
+                  Detail
+                </button>
+                {canManage && (
+                  <>
+                    <Link
+                      href={`/candidates/${candidate.id}/edit`}
+                      className="secondary-button text-center text-sm"
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCandidate(candidate)}
+                      className="danger-button text-sm"
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -604,6 +673,19 @@ export default function DashboardPage() {
         roles={roles}
         showSalary={showSalary}
         onClose={() => setDetailCandidate(null)}
+      />
+
+      <ConfirmDialog
+        open={!!selectedCandidate}
+        title="Delete Candidate?"
+        description={`Kandidat "${selectedCandidate?.nameOfCandidate}" akan dihapus. Action ini tidak bisa dibatalkan.`}
+        confirmText="Delete Candidate"
+        onClose={() => setSelectedCandidate(null)}
+        onConfirm={deleteCandidate}
+      />
+      <BlockingLoadingOverlay
+        open={loading || deleting}
+        label={deleting ? "Menghapus kandidat..." : "Memuat dashboard..."}
       />
     </section>
   );
@@ -643,6 +725,14 @@ function matchesDashboardSearch(
   }
 
   return candidate.position.toLowerCase().includes(raw);
+}
+
+function candidateStatusStyle(candidate: Candidate) {
+  const color = candidate.statusColorHex || statusColor(candidate.status);
+  return {
+    backgroundColor: color,
+    borderColor: color,
+  };
 }
 
 function MetricCard({ label, value }: { label: string; value: number }) {
@@ -688,7 +778,7 @@ function CandidateDetailDialog({
 
   const rows: { label: string; value: string }[] = [
     { label: "ID", value: candidate.id },
-    { label: "Role", value: getRoleName(roles, candidate.roleId) },
+    { label: "Role yang Dilamar", value: getRoleName(roles, candidate.roleId) },
     { label: "Position", value: candidate.position },
     { label: "Level", value: candidate.level },
     { label: "Name Of Candidate", value: candidate.nameOfCandidate },
@@ -777,16 +867,14 @@ function DonutChart({
   const segments = data
     .filter((item) => item.count > 0)
     .reduce<
-      (typeof data[number] & {
+      ((typeof data)[number] & {
         endAngle: number;
         path: string;
         activePath: string;
       })[]
     >((items, item) => {
       const currentAngle =
-        items.length === 0
-          ? -90
-          : items[items.length - 1].endAngle;
+        items.length === 0 ? -90 : items[items.length - 1].endAngle;
       const angle = (item.count / total) * 360;
       const startAngle = currentAngle;
       const endAngle = currentAngle + Math.min(angle, 359.99);
@@ -797,14 +885,7 @@ function DonutChart({
           ...item,
           endAngle,
           path: describeDonutArc(128, 128, 112, 62, startAngle, endAngle),
-          activePath: describeDonutArc(
-            128,
-            128,
-            118,
-            56,
-            startAngle,
-            endAngle,
-          ),
+          activePath: describeDonutArc(128, 128, 118, 56, startAngle, endAngle),
         },
       ];
     }, []);
@@ -865,7 +946,12 @@ function describeDonutArc(
 ) {
   const startOuter = polarToCartesian(centerX, centerY, outerRadius, endAngle);
   const endOuter = polarToCartesian(centerX, centerY, outerRadius, startAngle);
-  const startInner = polarToCartesian(centerX, centerY, innerRadius, startAngle);
+  const startInner = polarToCartesian(
+    centerX,
+    centerY,
+    innerRadius,
+    startAngle,
+  );
   const endInner = polarToCartesian(centerX, centerY, innerRadius, endAngle);
   const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
 

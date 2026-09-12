@@ -254,7 +254,7 @@ export async function fetchLookups() {
 }
 
 export function getRoleName(roles: Role[] | RoleLookup[], roleId: string) {
-  if (!roleId) return "Talent Pool";
+  if (!roleId) return "Belum ada role";
   return roles.find((role) => role.id === roleId)?.name || "Deleted Role";
 }
 
@@ -327,7 +327,7 @@ export function filterCandidates(
     const matchRole =
       params.roleFilter === "all"
         ? true
-        : params.roleFilter === "talent-pool"
+        : params.roleFilter === "without-role"
           ? !candidate.roleId
           : candidate.roleId === params.roleFilter;
 

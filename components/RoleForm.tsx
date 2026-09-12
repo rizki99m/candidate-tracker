@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 import { FormValidationDialog } from "@/components/FormValidationDialog";
 import { LookupItem, Role, RoleStatus } from "@/lib/recruitment";
 
@@ -15,7 +16,7 @@ export function RoleForm({
   submitLabel: string;
   onSubmit: (
     data: Omit<Role, "id" | "createdAt" | "updatedAt">
-  ) => void;
+  ) => Promise<void> | void;
 }) {
   const [form, setForm] = useState({
     name: initialRole?.name || "",
@@ -26,8 +27,9 @@ export function RoleForm({
     notes: initialRole?.notes || "",
   });
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const errors = validateRoleForm(form, roleStatusesLookup.length > 0);
@@ -36,14 +38,19 @@ export function RoleForm({
       return;
     }
 
-    onSubmit({
-      name: form.name.trim(),
-      department: form.department.trim(),
-      level: form.level.trim(),
-      statusId: form.statusId,
-      status: form.status,
-      notes: form.notes.trim(),
-    });
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        name: form.name.trim(),
+        department: form.department.trim(),
+        level: form.level.trim(),
+        statusId: form.statusId,
+        status: form.status,
+        notes: form.notes.trim(),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -147,7 +154,11 @@ export function RoleForm({
         />
       </label>
 
-      <button type="submit" className="primary-button w-full sm:w-auto">
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="primary-button w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+      >
         {submitLabel}
       </button>
 
@@ -158,6 +169,7 @@ export function RoleForm({
         errors={validationErrors}
         onClose={() => setValidationErrors([])}
       />
+      <BlockingLoadingOverlay open={isSubmitting} label="Menyimpan role..." />
     </form>
   );
 }

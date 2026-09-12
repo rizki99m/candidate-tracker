@@ -8,6 +8,21 @@ import {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
+  const isGuest = body.guest === true;
+
+  if (isGuest) {
+    const sessionUser = {
+      id: 0,
+      fullName: "Guest",
+      username: "guest",
+      role: "guest",
+    };
+    const token = await createSessionToken(sessionUser);
+    const response = NextResponse.json({ user: sessionUser });
+    response.cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions());
+    return response;
+  }
+
   const username = typeof body.username === "string" ? body.username.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
 

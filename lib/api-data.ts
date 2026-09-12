@@ -8,6 +8,12 @@ export function asDateString(value: unknown) {
   return asString(value).slice(0, 10);
 }
 
+export function asDateTimeString(value: unknown) {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
 export function nullableString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -72,7 +78,7 @@ export function mapCandidate(row: Record<string, unknown>) {
   return {
     id: asString(row.id),
     roleId: asString(row.role_id),
-    roleName: asString(row.role_name) || "Talent Pool",
+    roleName: asString(row.role_name) || "Belum ada role",
     statusId: asString(row.status_id),
     statusName,
     statusColorHex: asString(row.status_color_hex),
@@ -83,7 +89,7 @@ export function mapCandidate(row: Record<string, unknown>) {
     phoneNumber: asString(row.phone_number),
     department: asString(row.department),
     source: asString(row.source),
-    poolDate: asDateString(row.pool_date),
+    poolDate: asDateTimeString(row.pool_date),
     education: asString(row.education),
     university: asString(row.university),
     major: asString(row.major),
@@ -98,8 +104,8 @@ export function mapCandidate(row: Record<string, unknown>) {
     psychologicalTest: asString(row.psychological_test),
     feedbackFromUser: asString(row.feedback_from_user),
     status: statusName,
-    hrInterviewDate: asDateString(row.hr_interview_date),
-    userInterviewDate: asDateString(row.user_interview_date),
+    hrInterviewDate: asDateTimeString(row.hr_interview_date),
+    userInterviewDate: asDateTimeString(row.user_interview_date),
     createdAt: asDateString(row.created_at),
     updatedAt: asDateString(row.updated_at),
   };

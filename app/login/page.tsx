@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,6 +44,30 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login gagal.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function continueAsGuest() {
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guest: true }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || "Gagal masuk sebagai guest.");
+      }
+
+      router.replace("/");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal masuk sebagai guest.");
     } finally {
       setLoading(false);
     }
@@ -118,6 +143,16 @@ export default function LoginPage() {
             {loading ? <LoadingIndicator label="Signing in..." /> : "Login"}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={continueAsGuest}
+          disabled={loading}
+          className="secondary-button mt-3 w-full disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Continue as Guest
+        </button>
+        <BlockingLoadingOverlay open={loading} label="Sedang masuk..." />
       </section>
     </main>
   );

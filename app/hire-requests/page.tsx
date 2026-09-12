@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 import { InteractiveValue } from "@/components/InteractiveValue";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
 import {
@@ -84,6 +85,7 @@ export default function HireRequestsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -154,6 +156,7 @@ export default function HireRequestsPage() {
   async function deleteHireRequest() {
     if (!selectedHireRequest) return;
 
+    setDeleting(true);
     try {
       await deleteHireRequestRequest(selectedHireRequest.id);
       setHireRequests((current) =>
@@ -162,6 +165,8 @@ export default function HireRequestsPage() {
       setSelectedHireRequest(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Gagal menghapus hire request.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -402,6 +407,10 @@ export default function HireRequestsPage() {
         confirmText="Delete Hire Request"
         onClose={() => setSelectedHireRequest(null)}
         onConfirm={deleteHireRequest}
+      />
+      <BlockingLoadingOverlay
+        open={loading || deleting}
+        label={deleting ? "Menghapus hire request..." : "Memuat hire request..."}
       />
 
       <HireRequestDetailDialog

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 import { FormValidationDialog } from "@/components/FormValidationDialog";
 import {
   HireRequest,
@@ -51,7 +52,7 @@ export function HireRequestForm({
   initialHireRequest?: Partial<HireRequest>;
   hireRequestStatusesLookup?: LookupItem[];
   submitLabel: string;
-  onSubmit: (data: HireRequestFormData) => void;
+  onSubmit: (data: HireRequestFormData) => Promise<void> | void;
 }) {
   const isEdit = !!initialHireRequest?.id;
   const [form, setForm] = useState<HireRequestFormData>({
@@ -79,12 +80,13 @@ export function HireRequestForm({
     isUrgent: initialHireRequest?.isUrgent || false,
   });
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function updateField(key: keyof HireRequestFormData, value: string | boolean) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const errors = validateHireRequestForm(
@@ -97,7 +99,9 @@ export function HireRequestForm({
       return;
     }
 
-    onSubmit({
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
       ...form,
       requestedBy: form.requestedBy.trim(),
       reasonForHiring: form.reasonForHiring.trim(),
@@ -120,8 +124,11 @@ export function HireRequestForm({
       status: isEdit
         ? form.status
         : hireRequestStatusesLookup[0]?.name || form.status,
-      isUrgent: form.isUrgent,
-    });
+        isUrgent: form.isUrgent,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -215,7 +222,11 @@ export function HireRequestForm({
         </span>
       </label>
 
-      <button type="submit" className="primary-button w-full sm:w-auto">
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="primary-button w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+      >
         {submitLabel}
       </button>
 
@@ -225,6 +236,10 @@ export function HireRequestForm({
         description="Ada input yang kurang atau formatnya belum sesuai."
         errors={validationErrors}
         onClose={() => setValidationErrors([])}
+      />
+      <BlockingLoadingOverlay
+        open={isSubmitting}
+        label="Menyimpan hire request..."
       />
     </form>
   );

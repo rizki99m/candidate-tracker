@@ -33,5 +33,5 @@ export function canSeeSalary(role?: string | null) {
 export function canAccessSection(role: string | null | undefined, path: string) {
   const normalized = normalizeRole(role);
   if (normalized !== "guest") return true;
-  return path === "/" || path.startsWith("/candidates");
+  return path === "/";
 }

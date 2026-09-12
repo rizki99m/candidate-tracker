@@ -61,13 +61,26 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (
-    session?.role === "guest" &&
-    !pathname.startsWith("/api/") &&
-    pathname !== "/" &&
-    pathname !== "/candidates"
-  ) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (session?.role === "guest") {
+    const guestApiPaths = new Set([
+      "/api/auth/me",
+      "/api/auth/logout",
+      "/api/dashboard",
+      "/api/candidates",
+      "/api/lookups",
+      "/api/roles",
+    ]);
+    const canUseGuestApi =
+      guestApiPaths.has(pathname) &&
+      (request.method === "GET" || pathname === "/api/auth/logout");
+
+    if (pathname.startsWith("/api/") && !canUseGuestApi) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (!pathname.startsWith("/api/") && pathname !== "/") {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
   }
 
   if (

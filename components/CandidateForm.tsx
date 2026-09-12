@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BlockingLoadingOverlay } from "@/components/BlockingLoadingOverlay";
 import { FormValidationDialog } from "@/components/FormValidationDialog";
 import {
   Candidate,
@@ -42,7 +43,7 @@ export function CandidateForm({
   candidateStatusesLookup?: CandidateStatusLookup[];
   initialCandidate?: Partial<Candidate>;
   submitLabel: string;
-  onSubmit: (data: CandidateFormData) => void;
+  onSubmit: (data: CandidateFormData) => Promise<void> | void;
 }) {
   const defaultStatusId =
     initialCandidate?.statusId || candidateStatusesLookup[0]?.id || "";
@@ -55,7 +56,7 @@ export function CandidateForm({
     phoneNumber: initialCandidate?.phoneNumber || "",
     department: initialCandidate?.department || "",
     source: initialCandidate?.source || "",
-    poolDate: initialCandidate?.poolDate || todayString(),
+    poolDate: toDateTimeLocal(initialCandidate?.poolDate || todayString()),
     education: initialCandidate?.education || "",
     university: initialCandidate?.university || "",
     major: initialCandidate?.major || "",
@@ -73,10 +74,11 @@ export function CandidateForm({
     status: (initialCandidate?.status ||
       candidateStatusesLookup[0]?.name ||
       "") as CandidateStatus,
-    hrInterviewDate: initialCandidate?.hrInterviewDate || "",
-    userInterviewDate: initialCandidate?.userInterviewDate || "",
+    hrInterviewDate: toDateTimeLocal(initialCandidate?.hrInterviewDate || ""),
+    userInterviewDate: toDateTimeLocal(initialCandidate?.userInterviewDate || ""),
   });
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function updateField<K extends keyof CandidateFormData>(
     key: K,
@@ -104,7 +106,7 @@ export function CandidateForm({
     updateField(key, formatRupiah(value));
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const errors = validateCandidateForm(form, candidateStatusesLookup.length > 0);
@@ -113,35 +115,40 @@ export function CandidateForm({
       return;
     }
 
-    onSubmit({
-      ...form,
-      roleId: form.roleId,
-      position: form.position.trim(),
-      level: form.level.trim(),
-      nameOfCandidate: form.nameOfCandidate.trim(),
-      email: form.email.trim(),
-      phoneNumber: form.phoneNumber.trim(),
-      department: form.department.trim(),
-      source: form.source.trim(),
-      poolDate: form.poolDate,
-      education: form.education.trim(),
-      university: form.university.trim(),
-      major: form.major.trim(),
-      gpa: form.gpa.trim(),
-      location: form.location.trim(),
-      currentSalary: form.currentSalary.trim(),
-      expectedSalary: form.expectedSalary.trim(),
-      linkedInProfile: form.linkedInProfile.trim(),
-      summaryInterviewHr: form.summaryInterviewHr.trim(),
-      cvLink: form.cvLink.trim(),
-      portfolioLink: form.portfolioLink.trim(),
-      psychologicalTest: form.psychologicalTest.trim(),
-      feedbackFromUser: form.feedbackFromUser.trim(),
-      statusId: form.statusId,
-      status: form.status,
-      hrInterviewDate: form.hrInterviewDate,
-      userInterviewDate: form.userInterviewDate,
-    });
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        ...form,
+        roleId: form.roleId,
+        position: form.position.trim(),
+        level: form.level.trim(),
+        nameOfCandidate: form.nameOfCandidate.trim(),
+        email: form.email.trim(),
+        phoneNumber: form.phoneNumber.trim(),
+        department: form.department.trim(),
+        source: form.source.trim(),
+        poolDate: form.poolDate,
+        education: form.education.trim(),
+        university: form.university.trim(),
+        major: form.major.trim(),
+        gpa: form.gpa.trim(),
+        location: form.location.trim(),
+        currentSalary: form.currentSalary.trim(),
+        expectedSalary: form.expectedSalary.trim(),
+        linkedInProfile: form.linkedInProfile.trim(),
+        summaryInterviewHr: form.summaryInterviewHr.trim(),
+        cvLink: form.cvLink.trim(),
+        portfolioLink: form.portfolioLink.trim(),
+        psychologicalTest: form.psychologicalTest.trim(),
+        feedbackFromUser: form.feedbackFromUser.trim(),
+        statusId: form.statusId,
+        status: form.status,
+        hrInterviewDate: form.hrInterviewDate,
+        userInterviewDate: form.userInterviewDate,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -153,15 +160,15 @@ export function CandidateForm({
         </p>
       </div>
 
-      <FormSection title="Role" defaultOpen>
+      <FormSection title="Role yang Dilamar" defaultOpen>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Role Applied">
+          <Field label="Role yang Dilamar">
             <select
               value={form.roleId}
               onChange={(event) => handleRoleChange(event.target.value)}
               className="input"
             >
-              <option value="">No Role / Talent Pool</option>
+              <option value="">Belum ada role</option>
               {roles
                 .filter((role) => role.status === "Active")
                 .map((role) => (
@@ -365,7 +372,7 @@ export function CandidateForm({
 
         <Field label="Pool Date">
           <input
-            type="date"
+            type="datetime-local"
             value={form.poolDate}
             onChange={(event) => updateField("poolDate", event.target.value)}
             className="input"
@@ -374,7 +381,7 @@ export function CandidateForm({
 
         <Field label="HR Interview Date">
           <input
-            type="date"
+            type="datetime-local"
             value={form.hrInterviewDate}
             onChange={(event) =>
               updateField("hrInterviewDate", event.target.value)
@@ -385,7 +392,7 @@ export function CandidateForm({
 
         <Field label="User Interview Date">
           <input
-            type="date"
+            type="datetime-local"
             value={form.userInterviewDate}
             onChange={(event) =>
               updateField("userInterviewDate", event.target.value)
@@ -457,7 +464,11 @@ export function CandidateForm({
         />
       </Field>
 
-      <button type="submit" className="primary-button w-full sm:w-auto">
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="primary-button w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+      >
         {submitLabel}
       </button>
 
@@ -468,6 +479,7 @@ export function CandidateForm({
         errors={validationErrors}
         onClose={() => setValidationErrors([])}
       />
+      <BlockingLoadingOverlay open={isSubmitting} label="Menyimpan kandidat..." />
     </form>
   );
 }
@@ -502,16 +514,16 @@ function validateCandidateForm(
     errors.push("Pool Date wajib diisi.");
   }
 
-  if (!isValidDateInput(form.poolDate)) {
-    errors.push("Pool Date harus memakai format tanggal yang valid.");
+  if (!isValidDateTimeInput(form.poolDate)) {
+    errors.push("Pool Date harus memakai tanggal dan jam yang valid.");
   }
 
-  if (form.hrInterviewDate && !isValidDateInput(form.hrInterviewDate)) {
-    errors.push("HR Interview Date harus memakai format tanggal yang valid.");
+  if (form.hrInterviewDate && !isValidDateTimeInput(form.hrInterviewDate)) {
+    errors.push("HR Interview Date harus memakai tanggal dan jam yang valid.");
   }
 
-  if (form.userInterviewDate && !isValidDateInput(form.userInterviewDate)) {
-    errors.push("User Interview Date harus memakai format tanggal yang valid.");
+  if (form.userInterviewDate && !isValidDateTimeInput(form.userInterviewDate)) {
+    errors.push("User Interview Date harus memakai tanggal dan jam yang valid.");
   }
 
   if (hasStatusLookup && !form.statusId) {
@@ -536,17 +548,28 @@ function isValidGpa(value: string) {
   return Number.isFinite(gpa) && gpa >= 0 && gpa <= 4;
 }
 
-function isValidDateInput(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+function isValidDateTimeInput(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) return false;
 
-  const [, year, month, day] = match;
+  const [, year, month, day, hour, minute] = match;
   const date = new Date(Number(year), Number(month) - 1, Number(day));
   return (
     date.getFullYear() === Number(year) &&
     date.getMonth() === Number(month) - 1 &&
-    date.getDate() === Number(day)
+    date.getDate() === Number(day) &&
+    Number(hour) >= 0 &&
+    Number(hour) <= 23 &&
+    Number(minute) >= 0 &&
+    Number(minute) <= 59
   );
+}
+
+function toDateTimeLocal(value: string) {
+  if (!value) return "";
+  const dateTime = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+  if (dateTime) return `${dateTime[1]}T${dateTime[2]}:${dateTime[3]}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00` : "";
 }
 
 function FormSection({

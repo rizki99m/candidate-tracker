@@ -68,7 +68,9 @@ export async function GET() {
   return NextResponse.json({
     totals: {
       totalCandidates: Number(totals.total_candidates || 0),
-      totalTalentPool: Number(totals.total_talent_pool || 0),
+      totalWithoutRole: Number(
+        totals.total_without_role || totals.total_talent_pool || 0,
+      ),
       totalWithoutStatus: Number(totals.total_without_status || 0),
       totalHired: Number(totals.total_hired || 0),
       totalRejected: Number(totals.total_rejected || 0),
@@ -80,11 +82,17 @@ export async function GET() {
       sortOrder: Number(row.sort_order || 0),
       candidateCount: Number(row.candidate_count || 0),
     })),
-    byRole: byRole.map((row) => ({
-      roleId: asString(row.role_id),
-      roleName: asString(row.role_name) || "Talent Pool",
-      candidateCount: Number(row.candidate_count || 0),
-    })),
+    byRole: byRole.map((row) => {
+      const roleName = asString(row.role_name);
+      return {
+        roleId: asString(row.role_id),
+        roleName:
+          !roleName || roleName === "Talent Pool"
+            ? "Belum ada role"
+            : roleName,
+        candidateCount: Number(row.candidate_count || 0),
+      };
+    }),
   });
 }
 
